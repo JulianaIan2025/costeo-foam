@@ -1,0 +1,2103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Costeo FOAM Integral · North Foam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  --shell:#14213b; --shell2:#1d2f4d; --shell3:#274063;
+  --workspace:#eceff1; --panel:#ffffff; --line:#dde3e8; --line2:#eef2f4;
+  --text:#182430; --muted:#5f6d7a; --muted2:#8a97a3;
+  --accent:#2b5488; --accent2:#193a63; --accentSoft:#e8eef6;
+  --input:#1f5fbf;      /* azul = captura */
+  --calc:#182430;       /* negro = fórmula */
+  --link:#0f7a49;       /* verde = liga entre hojas */
+  --pend:#9a6b00; --pendBg:#fbf3d7; --pendLine:#e6d38f;
+  --green:#1f9d55; --greenBg:#e6f5ec;
+  --amber:#c98a00; --amberBg:#fbf1d8;
+  --red:#cf3f52; --redBg:#fbe6e9;
+  --gray:#8a97a3; --grayBg:#eceff1;
+  --shadow:0 1px 2px rgba(16,30,42,.06),0 2px 8px rgba(16,30,42,.05);
+}
+:root:not([data-theme="light"]){ /* respeta modo oscuro del visor sin romper legibilidad de datos: mantenemos el workspace claro */ }
+*{box-sizing:inherit}
+html,body{height:100%}
+body{
+  margin:0; background:var(--shell);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color:var(--text); -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+.app{display:flex;min-height:100%;}
+/* ---------- NAV ---------- */
+.nav{
+  width:210px;flex:0 0 210px;background:var(--shell);color:#c9d6e0;
+  display:flex;flex-direction:column;position:sticky;top:0;align-self:flex-start;height:100vh;
+  padding-top:env(safe-area-inset-top,0px);
+}
+.brand{padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.logo-wrap{background:#fff;border-radius:10px;padding:8px 12px;display:flex;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.brand .logo{width:100%;max-width:172px;height:auto;display:block}
+.brand h1{font-size:12px;font-weight:600;margin:8px 0 0;letter-spacing:.3px;color:#e6eef4;text-align:center}
+.brand .sub{font-size:10.5px;color:#7d94a6;margin-top:2px;line-height:1.35;text-align:center}
+.navlist{list-style:none;margin:0;padding:8px 0;overflow-y:auto;flex:1}
+.navlist li{margin:0}
+.navbtn{width:100%;text-align:left;background:none;border:0;color:#a9bbc8;
+  font:inherit;font-size:13px;padding:8px 18px;cursor:pointer;display:flex;gap:9px;align-items:center;
+  border-left:3px solid transparent}
+.navbtn:hover{background:rgba(255,255,255,.05);color:#e6eef4}
+.navbtn.active{background:var(--shell2);color:#fff;border-left-color:var(--accent)}
+.navbtn .ix{font-size:11px;color:#5f7688;width:16px;flex:0 0 16px}
+.navbtn.active .ix{color:var(--accent)}
+.navfoot{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6f8698}
+/* ---------- MAIN ---------- */
+.main{flex:1;min-width:0;background:var(--workspace);display:flex;flex-direction:column}
+.topbar{background:var(--panel);border-bottom:1px solid var(--line);
+  padding:10px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:20;
+  padding-top:calc(10px + env(safe-area-inset-top,0px))}
+.topbar .save{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-size:12.5px;font-weight:500;border:1px solid var(--line);background:var(--panel);
+  color:var(--text);padding:7px 13px;border-radius:7px;cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent2)}
+.btn.ghost{border-color:transparent;color:var(--muted)}
+/* KPI strip */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);
+  border-bottom:1px solid var(--line)}
+.kpi{background:var(--panel);padding:11px 16px}
+.kpi .lab{font-size:10.5px;color:var(--muted2);text-transform:none;letter-spacing:.2px;font-weight:500}
+.kpi .val{font-size:19px;font-weight:600;margin-top:2px;color:var(--text)}
+.kpi .val small{font-size:11px;color:var(--muted);font-weight:500}
+.kpi.state .val{font-size:14px}
+.chain{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:9px 22px;background:var(--shell2);
+  border-bottom:1px solid var(--line)}
+.chain .c{font-size:11px;color:#cfe0ea;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);
+  padding:3px 9px;border-radius:20px;white-space:nowrap}
+.chain .c b{color:#fff;font-weight:600}
+.chain .ar{color:#5f7c90;font-size:12px}
+/* content */
+.content{padding:20px 22px 60px;overflow-x:auto}
+.sechead{display:flex;align-items:baseline;gap:12px;margin:2px 0 4px;flex-wrap:wrap}
+.sechead h2{font-size:17px;margin:0;font-weight:600}
+.sechead .src{font-size:11px;color:var(--muted2);font-family:"IBM Plex Mono",monospace}
+.lead{font-size:12.5px;color:var(--muted);max-width:80ch;line-height:1.5;margin:6px 0 16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+.card > h3{font-size:13px;margin:0;padding:11px 15px;border-bottom:1px solid var(--line2);
+  background:#f8fafb;font-weight:600;display:flex;align-items:center;gap:8px}
+.card .body{padding:6px 4px}
+.card .pad{padding:12px 15px}
+/* tables */
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{padding:6px 9px;text-align:right;border-bottom:1px solid var(--line2);white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:11px;background:#f8fafb;position:sticky;top:0}
+td.l,th.l{text-align:left}
+td.l{white-space:normal;overflow-wrap:anywhere}
+tr:last-child td{border-bottom:0}
+tr.total td{font-weight:700;background:#f3f7f8;border-top:1px solid var(--line)}
+tr.sub td{background:#fbfcfd;font-weight:600;color:var(--accent2)}
+.val-calc{color:var(--calc);font-weight:500}
+.val-link{color:var(--link);font-weight:500}
+.val-pend{color:var(--pend);background:var(--pendBg);border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600}
+/* inputs */
+input.f,select.f{font:inherit;font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--input);font-weight:600;
+  border:1px solid var(--line);background:#fbfdff;border-radius:5px;padding:4px 7px;width:90px;text-align:right;
+  -moz-appearance:textfield}
+input.f::-webkit-outer-spin-button,input.f::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input.f:focus,select.f:focus{outline:2px solid var(--accentSoft);border-color:var(--accent)}
+input.f.wide{width:260px;max-width:42vw;text-align:left}
+input.f.txt{text-align:left;color:var(--input)}
+select.f{width:auto;text-align:left;min-width:96px;cursor:pointer}
+input.f.pend{border-color:var(--pendLine);background:var(--pendBg)}
+.unit{color:var(--muted2);font-size:11px;margin-left:4px}
+.hint{font-size:11px;color:var(--muted2);font-style:italic}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin:14px 0 4px}
+.legend b{font-weight:600}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:4px}
+/* semáforo */
+.lz{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:11.5px;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.lz .b{width:8px;height:8px;border-radius:50%}
+.lz.v{color:#0f7a3d;background:var(--greenBg)} .lz.v .b{background:var(--green)}
+.lz.a{color:#8a6100;background:var(--amberBg)} .lz.a .b{background:var(--amber)}
+.lz.r{color:#a32636;background:var(--redBg)} .lz.r .b{background:var(--red)}
+.lz.g{color:#5f6d7a;background:var(--grayBg)} .lz.g .b{background:var(--gray)}
+.pill{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+.pill.ok{color:#0f7a3d;background:var(--greenBg)}
+.pill.rev{color:#a32636;background:var(--redBg)}
+.note{font-size:11.5px;color:var(--muted);background:#f8fafb;border:1px solid var(--line2);
+  border-radius:8px;padding:10px 13px;line-height:1.5}
+.tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:var(--accentSoft);color:var(--accent2)}
+.rowbtn{border:1px dashed var(--line);background:none;color:var(--accent2);font:inherit;font-size:12px;
+  padding:6px 12px;border-radius:6px;cursor:pointer;margin:8px 4px}
+.rowbtn:hover{border-color:var(--accent);background:#f5fbfb}
+.del{border:0;background:none;color:var(--muted2);cursor:pointer;font-size:14px;padding:2px 6px}
+.del:hover{color:var(--red)}
+.filterbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow)}
+.scroll table th:first-child,.scroll table td:first-child{position:sticky;left:0;background:#f8fafb;z-index:1}
+.scroll table td:first-child{background:var(--panel)}
+.scroll td,.scroll th{padding-top:4px;padding-bottom:4px;vertical-align:middle}
+.scroll td.l{white-space:nowrap}
+.scroll input.f,.scroll select.f{padding-top:3px;padding-bottom:3px}
+/* ---------- PANEL EJECUTIVO ---------- */
+.exhead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:4px}
+.exhead h2{font-size:19px;margin:0;font-weight:700}
+.exsel{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+  border-radius:9px;padding:5px 8px 5px 12px;box-shadow:var(--shadow)}
+.exsel span{font-size:11px;color:var(--muted);font-weight:500}
+.exsel select{font:inherit;font-size:13px;font-weight:600;color:var(--accent2);border:0;background:none;cursor:pointer;padding:2px 4px}
+.seges{display:inline-flex;background:#e6ebee;border-radius:8px;padding:3px;gap:2px}
+.seges button{font:inherit;font-size:12px;font-weight:600;border:0;background:none;color:var(--muted);
+  padding:5px 12px;border-radius:6px;cursor:pointer}
+.seges button.on{background:var(--panel);color:var(--accent2);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin:14px 0 6px}
+.hcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.hcard .k{font-size:11.5px;color:var(--muted);font-weight:500}
+.hcard .v{font-size:26px;font-weight:700;margin-top:4px;letter-spacing:-.4px}
+.hcard .v small{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:0}
+.hcard .d{font-size:11px;margin-top:3px;color:var(--muted2)}
+.hcard .d.up{color:var(--green)} .hcard .d.down{color:var(--red)}
+.hcard.accent{background:linear-gradient(160deg,#2b5488,#16304f);border-color:transparent}
+.hcard.accent .k,.hcard.accent .d{color:#cdd9ec} .hcard.accent .v{color:#fff}
+.hcard .bar{position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
+.hcard.g .bar{background:var(--gray)} .hcard.v .bar{background:var(--green)}
+.hcard.a .bar{background:var(--amber)} .hcard.r .bar{background:var(--red)}
+.exgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:16px;align-items:start}
+.exgrid .card.full{grid-column:1/-1}
+.chartbox{position:relative;height:270px;padding:8px 12px 12px}
+.chartbox.tall{height:320px}
+.insights{list-style:none;margin:0;padding:0}
+.insights li{display:flex;gap:10px;align-items:flex-start;padding:9px 15px;border-bottom:1px solid var(--line2);font-size:12.5px;line-height:1.45}
+.insights li:last-child{border-bottom:0}
+.insights .ic{width:22px;height:22px;border-radius:6px;flex:0 0 22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-top:1px}
+.ic.ok{background:var(--greenBg);color:#0f7a3d}
+.ic.warn{background:var(--amberBg);color:#8a6100}
+.ic.risk{background:var(--redBg);color:#a32636}
+.ic.info{background:var(--accentSoft);color:var(--accent2)}
+.insights b{font-weight:700}
+.modal-ov{position:fixed;inset:0;background:rgba(16,30,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.modal{background:var(--panel);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.32);max-width:440px;width:100%;padding:22px;border:1px solid var(--line)}
+.modal-msg{font-size:14px;color:var(--text);line-height:1.5;margin-bottom:20px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.btn.danger:hover{filter:brightness(.94)}
+@media (max-width:900px){.hero{grid-template-columns:repeat(2,1fr)}.exgrid{grid-template-columns:1fr}}
+@media (max-width:1180px){.kpis{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:820px){
+  .app{flex-direction:column}
+  .nav{width:100%;flex:none;height:auto;position:static;flex-direction:column}
+  .navlist{display:flex;flex-wrap:wrap;padding:4px}
+  .navbtn{width:auto;border-left:0;border-bottom:3px solid transparent;padding:8px 12px}
+  .navbtn.active{border-left:0;border-bottom-color:var(--accent)}
+  .navfoot{display:none}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .chain{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav">
+    <div class="brand">
+      <div class="logo-wrap"><img id="brandLogo" class="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANwAAACrCAYAAAANffL4AABSj0lEQVR42u29d7xdVZn//15rt1Nub7npnZCAlKHXgIBACAgRA4w4jl8cRUfHjDqW73f8jl/ry/E3DI6goKKABQUhBUKAQOhJCKEkJKSS3nNv7r257Zyz917r98cu95xbkhtARLOf1+u8bjm77/VZz/N8nrKE1lqTSCKJvCcik0eQSCIJ4BJJJAFcIokkkgAukUQSwCWSSCIJ4BJJJAFcIokkgEskkUQSwCWSSAK4RBJJJAFcIokkgEskkQRwibzfRJd8NKB6baFKtindK5H3q5jJI3j/Ai6Amkbgg9ZobQACUAih0MJEIxHhtiIGnJE8wPepiKQ85/0HNBFqMPABhVIaKZ34m2hL5bsIKRFChN+JXtskkmi4RA4BNg1ahFoNlK+REqRMkXN9Nm7YwoEDrVTXVDJx4jhSlg3axfcU0uh5lSLBXKLhEhkk5JTC1xqQmIakO6/405xH+N0f57Jxw2by+QK2bXHMseO4fsY0rr3mKrJpC9dTCDSGlAiZIC4BXCKHh5v2UX4Bw0wD8Oyylfz49l+z6NnFaGmTdrIIYQI+uXwHqC7OOfPvmPXPn+bic08LDFHXQ5hGaGYmkgAukV6iQCt8FwzDAEOwbcde/ueOX/PHOY/T2l0gk6lAIlAaQCLQCKlBaLo62sg4Bh/98GV88bP/i/GjhgIevu8hpYUQRg9xmWAwAdzRDjalXJRSmGaaXLfHb/80jzt/eTcbt2zHKatCG05AmujelL9AYWBIAapAd0cro0c08umbPs4/3HAlFekMru9hCIPYwky0XgK4o9d8dNFaI6UNwNOLl/Pj23/FM0texzQNbCeF0qA0iAFUU0CtaAzAlBI3l8PN5zjzzJP45899issvODUkXwpIKUBYyYNPAHcU6TOlQrBpDEMDJlt27uUnd97LfX+aS1dBYWVqQStQfmA6xgFv0R/FEgYCJGiBxEAKSXt3J2lHct2My/jCpz/GhNFD0fj4ng7MVkh8vARwf/vieR5aayzLoivv8ZvfP8TPfvlbtuzcT6qsAi0lyhex7hL95JL0hlwPGEX4p0RIB61dutubGDm8ls9++h/5hxtmUJEycV0XKWUMvEQSwP0Nmo86NB+DTLrnX3iB/7r9Xp5fvALTKsdKleFqhcbDVAW0EGHeSAgkEZIrA58BLVT4EwydAg2GAflcJ65X4LwzTuKrn72B888/P9a2QohE0yWA+2tGVvRDoQniYr6nMAwbIQWbtu/ltjvu5YGH5tCe12SyFWgtUEoHhIZWgQkpCALgotiU1IM6uRYaoY3gEFojZACqXFcnaROun3k1n//MjYwbMQSNi+/7SMNC68A0lUIUp7skkgDufQy2YNQCCk/5gMY0HLrzHvfe9xC3/fwetuzYT7a8GmlIfN/vdYA/3yiX0sBXiu7OVsaNaODmT32cT9xwDRnHouAVAIFlmIHGSwCXAO6vwG4EHWTwK6UxzCDV6qnnX+bHP/0VS15aDmYK086gkGjlv6csvQa0AYbQ+LkcqpDn7DPP4Auf/QQfOv9UgEDbCRlcV2JqJoB7X4tSeJ6HYVoIKXhr2x5+9vNfcd+fHqU7p0mXZfER+DoYzFKr91wBKxmc09ASA0lXZxdZBz52/XRu/tQ/Mm5EA0qB8j2MJFslAdxfAynSmXP53QMPc/vP72XL9l1kM1VIYeBrP9AyIiq5ee8z+5UIXrXUAqEFhjTwtUtn50HGjhzG5/7pRj428yrKUxa+UghEEL9LJAHcX5ATCen6wIpUSmMYAfv4zJJXueV/7uD5Ja8i7SxmqgzhKaRWQSWACApJA9AZfzFHSYSvXKDxpYkwbLzug2ivk3PO+Dtmff4zXHTO3wUg9f2wBKiYyElcvARwfz69ELKOAo0RkPVeDqUEhpUCAZu37eYnP/8dv3/oCXLdXWSz2diXi8Nj79cBEM4kMgwRdHZ2kk6n+ftrLuXzn/kYY0c1onwX7WsMw0IZIuZUegLzgqR5QAK4d0WjBcPLC/8yUUrjey6WnaIj5/K7Bx7hpz//NZu27CZTVoVlmni+30Pm/xUAThRdoBASjaazvY0xIxv53Gdu5B+uv5qMbeK7PsKI4omlsEs0XgK4d8E3i8g6D609lC8wTAeAJ194mVt+8gsWL18JVoaUk0F6hTim9tcIuAhCGtCmQz7fjfA6Oee0E/jSFz7NB885BQDfyyGliZAGWoue2HwiCeDeEeBUEMT2tY9pGAgkb23ZxY9/fg8PznmEjpxHqqwaDxOhFJby+h7jr0zDRVKQJkKYmPjkOlsoS5vMnDGNL9x0I2PHjEDpIIxghP5dwmgmgHvn3psX0OjSlLR15/nNH+Zwxy9+w6adeykrL8cQgYkJAqH7n+X/WgGnhA4aFGkTwxB4KkdHRzMTRjTyzzd/io/N/DBljonv+UgBIsnNTAB3RM4a4cjTOmAffTCsgAhY+Owy/r+f3MGSl1diOeXYmTS+54HWSHQ4YKPcx76A430OuP5mBCF80BKNiQIUPoapKeQ70Z7Huaedzr/9yz8x9ewTAzPT95EyMsEliZGZAO4Qqix6GgrPczFNG4Rg3aZd/ORndzHn4cfpLmhS2Qp8LdDa+1tjhg7jy+p4Y2mAxiLXkaMqY3Ld1Rfxzzf/I6NHNuIrF6VdLMMJ0lpIcJcAbgB2RCkvjDcZtHTmuPd3f+IXd93Pjt17SZeVgWHi6SBkbfwtPDLdW80NEnBCoTCRhoP2gxKgSeNH8Jl/+jgzP/phKiwTpdzAVJUGSbggAVyfwaSUi2EEldfzn3qR/7rt57zy2mosqxI7lcHXHkortFRB2UuRnVj8+P5WiQMdB8pBolDCwBMWQghMAW6hE9/r4LyzTuMrX/g0U08/CdD4fs9zTeQoB1yUjgUgpeTNt7Zw6//8kkcee5qcp7HTWcBCRb1ERNRuXCO0/JsCXO8hIKVkoGEhtUIJgSclaImhddAzRWpynR2UpUxu+Oh0PvvpTzBuWEMPWBMWMwGcVhppCO6b8wjf+dFP2bX9AOlMFcIwUdpDCS8M7YrwYQVAU4J+QfbX+iiPDHACXwTpaQKNpQKSxJMpDGGgvAIdnU2MHz+M//jKzcy44jKUDktpE9AdhYDTgPDx/AKmkeau3z/IV/7P9zBTZThWFj9KKkGjpBeaUuFACU3JI2EeRdRNWYDAQIU7CylKBmGU0NzTnEuFRaQq8IK0H1aCU1SYqv9Czy/6RSPDJkcaM/hKBI1ou/NdSD/HD7/9DT71sStRvo80ZMzkigRwRwnYAE0eIQzWbN7JjOs/y/7WPJZtB01+NPHyGEF2/Tt8PLqnKkBKAyElvvJRbje+5+J6fkzcgEBKC8u0MC0T07RQSgfXJRQ9adOEf7/fJrLofiWGaeG6BarLTOb/8U4mjh2G1gqkcVQD7uhaWyBQGUHisWHy1OPPsXPLLqqHjqHb9YIBLVQMtIGC2Uf6iIWUCDw8t4t8oQvHMRg5pIoxI49h6LChlJWVYRomXZ1d7NndxJZtO9i5Zx8HDx5EWjZ2pgwfA60UUus42//99GC1CIP/AqQA3+vGy7fT4RbYtnUrE8cND0z4o9ykPPoW8xCBj4LWXHDuOZx20kKWr95AuqIKJCgUKm7G8/bgprUOa8kkQmjy3R0olWPMqCFMPf9Szj//bP5u8kSGNg7BMUuHoOfD7r0HWLNhEy+9soJFzz7PijUbyPuSsmwGoSXa1wgkmvdey8V+mAZVVEQrpYFAofxuunOdlJeXcfm0C7j+I1dy5pmnhPWCxlHfvuGo8+F0tI6aAqRk955W/uv2X3HfA7PJu4VQm0iUDgiCtyuGYeC6Hl53GxPHjWDmR67mI1dfxtjhDSXAVEqhw36VCBGUyRhGPCab27t49IlnuOve+1j5xpsYVhbLKcNXBmgX3mPQFXuOWmuEEBhC4ufzFHLtVFemueKyD3LdzGs46/STMGKXuKimIAHcUcaZ6LCfv68wLAuF4PFFi7ntZ3exdPkKDLsM007jK/+Ijy+lRCtFe0c7jUOG8qmPX8WNH72CkY31gV9YyKO1QonA1OxNmwsZkScKpXxMQyKkzb6WNh6cu4Cf/+oPbNy2n1RZDaZUKL/wno7g4usVQuC6Lm6um5H1NVx6yQV89CPTOPPU48KOz/lggjNsJDJZ44CjOvAd3HZPKwFJy8Eufvmb+/jlvfeze18bqWwFUkqU0ogwC1kLjRY+IkxYRovgdxlUcOe7D5K1BZdedC43f/qTnHrCxMBU9LyYdRRCIgwDLUTYjVnjK4UhBEYIWAiKQl3PBQV2KgXAm29t5T9vuYPHHn+eHAZONg1Khf5RCAYt+73bI2JXte7hfMIjKBGkdRkC/HwnXncHI4c1cvX0S7j+2is4bvIx8b1CTx9OKZPE5gRwxTO2D75WGFZgyr365kZu++mvWPDkCxR8TTqdRWmJrwLaXsmA3JZaY4QkQS7XhfLynH7KSfzr5/8Xl0w9HSnAc724N6RSKh6ErQfbaG/vwDAkNTU1OI4TNCESMg7K+76PZdsYItjH1x6mYdHuKh6Z/yR3/uoPvL5qDY7jYJgOvgrUR38Nio4UcGgZG5AajQgTkwv5bvxCjlFDG7hm+mV87PqrmTR+RAw0rTVm2LGsOLEgkQRwoQ/lo1W4iKHw0crHNB18Hx5d+AL/c/sveH3lm/jSwbAzSNMBJEIrlMpTyHfg+wUmjh3JTR+fyQ3XzaCm3AlKe5QHUgbxs7DJUEtLC6+++ipNzc0o38c0TWrr6jjhAx+gtq4O5fsopVi3bh0dHR2MGTOGIQ2NQZ9YofFR+BrShkVTaye/uvsBfnH3b2hq7SJVVoNCIlWB3uGMIwWc1hYgMaRGK498rgvfKzBl4jCuvWY6H54+jYljGgFwCx4IHbdQLxQKSCmLNFwCuARw9LT7Rgh8z8c0NWgX5QfxMKTBzt2tPDTvURY9u5h1G7fS0taO5ylMQ1BRkWbc2JGcd+7ZXHPVZUweOzQoZXE9jDATw9chZS4E+XyeJ598kh07dpDNZMhkMjhOCtM0qago57jjj6e6upqOjg7Wrl2L4zikM2mGNg4lk8kEEwQajQcoLBks3Pjk08u57c67WfzKSrQwsR0nNlXRbw9whrBAK7o725HCZ/KkiVw5/VJu+MiljBpaF2hczyNoyBCF6WHTpk3s3r2bYcOGMW7cuNjXS7JMjnLARbedy+V49dXXyRe6Of4Dx9JQV4dSAq0NfOUjTQtTQFdBsWXrDrbv2ElXrpt0ymHk8OGMHjWcslSwDJSr8qAD1i6Y1QVaaTzfx7Isli1bxooVK6ioqMAyDFJOilQ6RTaTRRqS2tpaxowbh+/7dHR0hOvGmaTSDpZloTwRHN8AIRXK84LqBcumrctj9sNP8PNf3suq9dtxUhlsywzNUzUowEVZIkopCh1tSHxOOH4y//ixmVx+6QU01JTha4XrFjCkgRRBHqVWIAyLPXv28PLLL1NXV0dlZSWjR4+mrKwsQVkCuB5Ke9OmTSxfvpxsWYYRI4dz7JTJSGmjlERKP1w6KqD5peiHjFA+vucjDIGSKiQsBPv3N9HS0sqY0aPJpFJ4vs/jjz/OgQMHqKqqJGU5pFKpAHSpFIZhYJgGI8eMJpVKxUtbSRnE25TyMYSDlOC7GsMUID207+NrCdLElIK3tu3ljrsf4pH5j7Fn3z4M08aynaD/iBBhRkvP/QdAA60UbiFPIZ8jk8lw6okTmTljOldcdgm1FQFh4xXyCCtohy7DELbWHkpptJYcONDMzp07KS8vp6KigqqqKmw7qRZIAFc04LZu3cqePXtwHAfHcRg9ejTpTAa3UEBEvlccF9Oh36d71mYTso+P4rou69evp+C6jB09htq6WlzX5cUXX6StrY1sJkM6lSWTTuM4gfYyDBMhoaFxCJlMuiR5WGuN0gqv4LJ23Tqam5upqKjgmGOOoaqyEr9o3bmIsHhr81bmLniSuQsWsXbjVrpzftguwSg6LkGStueSTZkMb6zj3LNO4+orL+PMM04ibZvh/XgBOWSatLa0sGHjRgqFAnV1dYwdOxbLsuJ1Erq6utBak06nE7AlgOsrbW1tNDc3I4QklXKoq6uLB2UQElChFhAxCKL/AUH3YuXH+3ieh+/7dHV1YRgG6XQa0wy0wsqVK2lubiadSuM4KTKpNJZtY1kWUghMy6SmrgbLskoAp5TCkAbr1q/j1VdfDUxSy2Lo0KFMnjy5ZJFFpRRaK0wzMHN37j/Iq6+9wesrV7N+wyZ279mDWyjg+wrbtqmuqWbihPGcdsqJnHziFMaOqEcAPqB9P7hv3w/Ov3Ytr61YQWdnJ7ZtkclmGTVqFCeccAKpVAo/3L7HRE18twRwfVhKRVdXF77vx+CQUtLd3c2aNWtob29nyJAhTJgwAdM0A7ApHQNw8+bN7Nq1i/qGesaOG4cTExY9A04phWEY7N+/n61bt2JZFo6VwrFtLNvGDPv4p9MZyiqyfUy+6PfVq1ezd+9eMiHhks1mGTZsGJlMpmR1VT+My6EFjm0hjOA4roaurgL5fB60xrIt0uk0qaIEv3y+I4jnmakgtqg0hpSsW7OWF55/nnQmTXl5AHjLtjGkZPjw4Uw4ZmI8ORQzlImUinnUzzhCkM1mexhL4ODBgyxevJimpiYc26G9vR2AYyYdE/tAEsGGtzayetVqbMdGa00qnWbUqFF9auQi0NXV1eH7Pu3t7diGHdLoEoHAtmyy2UzJdfX+vbKykkKhEJtrjuPEwI9MOiEElmkEzZCURis/AB9gGoLKjIFKp4OqCClQysd1o+JaFWpjHWi4MHnbLbisX78Ox3GoKC8nnU6Hk5OFZZm4boFcLk8mE7Cm3d3dbNmyhWw2y8iRI8Oc0kTTJYDrpe2CtbcNdu7cSVNTE5VVVWTSaSzLorm5mba2g1RXVYHn4xYKNO3bT3VVFdXV1aQyaaSUeJ6HbdsDFnAOGdJANpsl15ULCsmlCMzLTAYpRUiy9z8x1NbWoLTCMk2kNAItY1klBEsu182+PbswDJPGxmE4qTSeD1Jo0D6+H5icWoOWAjDCjwQRwO5AczO+9qmtqcWUBrl8Dq2horycbDpDOpMh5aQCTe04SNOIr8HzPF599VX27dtHbW0tqVSKxsbGZIAlgOsJDURaKDIxTdOkvr4ex7JIp4LZ3DAMlOsidKQLNBVVlfieT2VlBdI0SWUCk7QUbKLIFwu0TiaTJZPKBMSLEAH7KQYmdqLqg3Q6y9BGB+X7IMA0TQwjALmUkra2NpYuXUpr834cJ8WIUWOYMuU4smXl+BqM0MTVIdBdzwU0pmUHANSQz+VpajpAWVkmyDNRCq015RXloDRl6QypkGCyHQfHthGmgWkGfmRHRwe5XI6RI0eSyWR6rj/RcEc34CJQBP0UZfw/KSXV1dWMGjUKXfAwDIllBcRGxg7WzkZKrJRDw9DGgEAImcZsNttnYImY34xqTINBLy1CgkOjUCXd+SM/SIR5laKo56VlWWBZURZ2UBEug9VU165dS2trKxWVNaRSDm6hwJbNmzjmmIk4joMfJR4bkgMHDrB27VoQMHrUaIYPGwZC4NgGI4cPxQ5TyrTWZDIZGoYMoaOjg4wTaPx0KoVhBqxnuiyLZQdETyqVYvjw4di2TSqVory8PAFdArhS1rGrqwvHcWJSpKqqCs/zyHV2IYVAGgbZTAYnk441kRCCmpqaGGSGYcSUfLFENWNSSkxT0NZ2kNbWVqTs2d8P07mK5cCBA+Ryudgs6+mc1VPioovupVAo4LoutbW1ZNJpUraDk3KQUnKwvYP6MPlZhD7WmjVryOVylJeX09LSQkVFBRUVFRiGQVlZWQyOiPAZO3Ysu3ftQvsqCGOYJpZtk3KccPsA9KlUitGjR+OHaWvF157IUa7hpJRs2bKFlStXUlNTw8knnxxnRlRXV9Nl26iQPs9mMxhGaC6KHnOveEAVJydHgA6qAwS5XDfr169n48aNtLW1Yds2DQ0NHHPMMYwcOTLe3zRN9u3bx4oVK7Btm46OjiDWZdslscDek4eUkoqKCtJhMN1xbGzbDioZQqBGejKfz2PbNjU1NWQyGQzDiBnV3mZ2RPhkMhlGjBxJZ3sHrutiWSbpdIZ0KgVFGiwCXTTJFC9WmUhCmrBjxw5yuRzt7e1s2LCBk046KTbdKquqenysiM4oytbo7WeVAk3H+Yz5Qp7nn3uOLVu3ks1kKCvLYtsOhUKB9evX43ke48ePj4+5f//+GBCGYdDd3Y3j2PHxguwTguZE4XkdJ4ghdnV1YUoDyzQxLQvDkDiOE/QTCZe5SaVS1NfXxxpIShkHqQfqQuZ5HqZhUF1bE0wsQgZNgZQOa/d0rOn72z+RBHAopSgrK6Ouri4ODXR2dlJeXo7ruj0AEv3P0JqA1Wxvb2fdunXk83lGjR7FsKHDYtCZlsGmtRvZtm0r2UyadDpFOpPBsVMYRuADtbW10dnZGV9DWVkZqVQK27axbQfHsQGFkKCVprm5Cd/3qaqqwbLs2OxraGigtbUV3/WCVLSQAY0WiAwK+ETMHHqeF5vCvYPtpfdJXAkQaa7o+UUTjgyLUXfu3InrujFp0jsYngDuKPfhysrK0Fpj2zamaeK6bgyWyFSLzKpo4EgESgdkRldHJ0uXLKHlQAuV5eVs8TaTsh3q6uuDJOBcnu3bdpDNlJHNZnEch1QqjRMCKhrsuVyOsrIyDMOgsbGRXC4XD3LHCcxWz/VYuXIlm956C9txGD58BMd/4AOhBtM4jkNtbS35XA4Vhjgcx0FKI+wN2ZM7mc6kQWt838MwTIoaJ4TbhIW3CKSG5qYm9u7dS8FzqaysZMSIkTgpB+0HiQBaKTa8uZYdO3eEwXSLUWPGJAhLAFcqEXUd+THpdBC8tW2b9o52Dra14TgpampqQhDKeFxKQwaDMF9g+NChVJSVYzk23V3duK6LYZrk8wWUr6korySdTuPYNk4qheXY2LaFbTuxdok0jB2me0GQNK1VUCW+bcs23ly9hkwmQ8pJc/DgQbZv3x6bo5EPmQ5LeYJuYcThh7A5JhDUAaJVfB4w8P0erR5VwmuteHPVala8/jq5rm7sUEvv3LGDE044garqGtAat1AIwgEjRpIty5KynUC7GYnvlgCuSMuVl5fHGiIy4wDWrlnLG2+sxHVdUk6KicdMZMqUKYCCoqoBwzCCcpTyclK2g2lbWI4dNs0JzK+ybDb0ndKhmWhj2lb8u5QyHvi9e5zE4QvPo7W1ldra2sAsTWfIlGXxPI98Ph9XGJT4kkoh+jOFw+atnlJs2/QWrS1tVFZWMGzYsB4SKAx/rHrjDV5+aRmZVJra2lqsVFDl4Hk+W7dsJZPJYjsOhmkyZtxYQGMYoW9oSBIvLgFcLL7vBwFc2w59niAHcM+ePby8/GV816W8rALbttmxfQdVlZWMHDU61DgBeVJdXYXruqQdB9MwEYYkW1aGaYZxKSdFbV0tnZ1dYcGpjWUFgAuqBIyY9CgOvMfXqBRSCHxf4aRS1NbW4tg26UwGwzIDJrIoaB+EH8ySexRFAe8e/9XnzTffZN2atWRSGdoqynALLhMmTAi1PbQfPMjatWtJp4P8Sce2sVM2tpMinQ7Yyba2VuqHDEEakpraWnzfQ2vCQLiIWdpEEsCVaLri33fu3ImUkqrqGmzbDmZx26KrvRO/4GJEhZ1Kk81kGTJE4rsupmFi2RambYemm8AwTYYOHcqePXtIpVJYVmBKCsOI07Isy4o1q9aaPXv2sH//furr66mvr0dpMEyDutpaDMMIj2MFaWHh71FpzsGDB9mzZw++79PY2Eh1dXWPphQiJHok+/Y1s2PHDhrq66koqyCVctC+T1dnJxWVlRhC0NQUkDPl5eVkMukgzc1xsJ2AzIlaASrfDxufa4RhIMMq+iKXMJEEcH1BF7V9s22b+vp6LGGQDs3MVMoh3SuIGwW10+k02nYCE9IM2plH7pIAampqAEFHRwemGbQwD9bpJSRRUvH5t27dyhtvvEE2mw0oftOktqYGgaS6tgbDNAOtJQW241BWlo2Zwy1bNrN8+St0dXVimibV1dVMnjyFMWPGhAnMIg7cRwH+imwZZelsXCUhEQEREmrebDZLWbYsCKY7KayUE08QpmGUTBSRH1zMYCaSAK7Il9EUCgUKhQIVFRXxICkvL0f5flgzZvX4WZk0wjTwdbBdlGhsGAbSkCjPD/0fFfczUCJoE1ddEyQ4By3kCDI1QoYyMglzuRz79u2jpqaGuro6UqkUrusGDKMA07KorqnGDbtjWbYZVhtAc/M+lr38EoV8nsqKMtLpDLZlsWvndirLs9TU1eH7Kl5Ko7y8grq6BizTIpVOB+35tMZMpfCFQGhNNpulsqqqhOyxLRvb6SF1LCfQ5gaSjoMH2bVrF+XlFdTX12OYZg9hk0gCOCFEmABslGi5QCOB53uYhhkXkJaVlyHDZGEhBJZl0dnVRVdrK4ZhUFlejjSNuBymRBOGZUDR7N+7oDUalFVVVZimGVeCF+dnRsxjdD1CgPIV0jDYt78JrTTVNbVkwrYNUflO28GDVNfUxsfxPI9MJsOwocPo7u7GtKwgPBGma0UhkerqampqgkB3KpWKk5WLJ4nAh5R0dXbyxhurKBQK5LpzmIZBXUN9SYglkcSkDHqJGEaJ+RMVdEaxMCklqVQqDuRKgtzFl5ctY9euXXiej+PYDGkYwuTJx1JVXdPTvjyoA8UIi1oty4rLeHoH023bZujQoRQKBawQBFGYolgrB+SIESe9eK6HQFJTXYvt2JRlsjEDKoTAkIEZKg0znliUUmSz2ZLjF9etRWAaOXIkTU1NwSRg2xgx2AWZTCYGX1dXF0IIhg0dGviVIXCLwx2JHOUV357nleQ/xnR6OEiixqYRKANjTODmCyxe/CIbN24k5TikM0GNmJRBmCHIyQzMUi0FBbfA+nXraWpqYvjw4YwbN64kBap49ldK4ft+fN4I8BHQPM/Ddd1Qe8mw/YJk77597NmzJ4jDOak4tUsISKdSVNfW9LRWD6vCo/sqLl6NgNeTmgaFQoHu7u44ESBKBYvIGoEgn+umqak5LoxNp9OYlokK8yj7S+xONNxR6MMFibWiuIVjLJZpxX5atK1lmmxYv56dO3ZQV1OLaZk4dsDcOekUUceuTCYTD969e/ayb98+ysrKcF2X7u7u2GeMGURKi2CLk4l7NxSKzUshkNIEIaiqrMHzwn4mQiJl4FcGGrscgYHnuXH2iq8UHZ2diFCjG6YRdB/rdU6lVKwto/9Fk0VsKmqNYzs0Ng4JYnwhMCGsp0vMyQRwwYwuQ7NMxASeLlrT2/N8PM/Dsq04LapQKNC8fz/l2TIymaAZkOM4gR+U6pn1Xc/DsoIAuOM4jBgxIg6s985bLP69OMP+UCZw3OIutFudlENNTTVdnd0BLU+YwhW2Y4hW6dHAzt27WbduHa1trZhGELYYP2FC6K/5sRaEIIk7InqiMEbvVDeEQGkfaZSuIaDC8yWSAA6ADevfYsiQRqqqK3CVh2nIeD0mQdCaLpfLYRgS0wx8lUKYspXNZoMUq3Qa2wqyS6RjYUgD23HCZOFAa9bW1sYaL8pvHAhUup9KhN7VCEVDOi5oBU02m8ayjJImRkEFerBakBTw+uuvsn7d+kDTmQaGEOzbu49cd47jpkyhtq4WpYKYnWEE5UubN28mnU4zYcIEamtr+yVBRFGHs8gsNk2TfC7H3r17OeaYYxK0Ha2Ai/y2lStX0NX1Eh//xI2Yhonv+RhGRBoELGRUlBkNYMM0yZaXxR2v4r6SlhXE4ISIwwjF5IMZxs+Kk6EHw6IWm3i9A/TFgIz+jkiMQO8FwfkouL5l0yZWr16NFbZWd5ygAa1tB+3Wd+zcSVl5eVCdICWtra2sXr06vv59+/aVpML1d71RaCXKonniiScAOOaYY/r4ywngjjaG0jSZO3ceLW1tzJhxDWNGD8dTGqUCM0ki4pVvItPJsizq6uo4ePAgmUwmptSllEizJ03L7NUrsjch01urFWux3tqu2CfqD5DFAz2aUHpvV8gXgjUNslnSqTSpVDrIWLFtHDuFHWau5HI5HMcBoLOri9ra2qBJUioVhyMG8oUjM9OyLLZv385jjz3GokWLuP766xPVlgAuin/BS0uXsWHDRq6YPo0LL7yAbNom73koHTRgLRpZCCGoa6gPVikVAtMMfaoQEKZpBhUIRYst9tFKgOpVAtS3UrwUPMX9Hg8FTN/36ezsREoZV0IgBN0dHeQLecrLynFSDinHCWvtUkUhhMCnFUKg0FRXVeGGIYooIyZqFtTHVws1eWtrG0888QTPPvsMTU1NeJ6fVHsngCsVx3E40NzCb+79La+9+ipXTJ/G8cdPwbbsoMzGkDE9oZTGSaWob6iP23pH5T1RylN/oCgenBE5EpEwuVyOzs7OIKukSEuk0+k4VhZpsSiZua8/13siESUTBUDKcdC2QyodgsyysO0Utu1gmgZSGmFtXODHptPpuFA1aslXDDAhwPejJkYeL7+8jEceeYQ3V78Z+Kq2HRMuiSSAi8kG3/cDAsGQvPHGKt58803OP/98rrnmwzQOqcdXGq3DrHsJaBGzjdHgk9KI/bNSsOme6gKlMA2J7ytaW1rYvXs323fsoP3gwSD2phSKgCGMKrHT6TQ1NTWMGjWaIUMasIsHsSxiK4t8ut4r1gghSGcyVFfVkM/nyWQy8fUbpolp2Rim0bM2QaCC0SEzWbxGQHG3M8MIzOmtW7cxd+5cli1bFgTt7RQCES5gKYPQRSIJ4IJeJSJoN6eCNb+jspqnnnqa9es3cMklF3Pe+edSnk1T8NxwEfmeQd4TkwpSlbUuIuu1BuUHrewMA6UVu3fuYdOmt2hpaaO7Oxc0ZVUaaUhE2PU42tf3XA625Wlra2Xnzh001DcwbtxYGoc0YtkWnu8jerUVL/brirVc0LRoCE1NTaTTmXgBEWlIDMuMtzFtCxVWFhSvtNPjqwW9USzLpq21neefe54nnnySnbt2B2VOphP2N5EYQiKQPUW7iSQaTggRx9gCbRW2C7ctdu7cyS9/eRfLX1nONddczZQpx4ZtCfw4C6THfyrpLdSTghX6aAcOHGDT5k1s376dfD6PaVg9mRoi6FWiASF7VlCUMlqyNwDzvv372L9/Pw1DGpg4YSJ1DQ3IXqRMcVuIElYTqK2vQ5oGbsENNLo04jXjogyRKM2tt6ZWSsVBcKU0y5e/wty5D7N2zTpM0woLV1W8ko9AIXUS8E4AVww4KcIGrbqIeg87dKnATEynbN5YuYq33nqLs846k+lXTGPE8GFhNYFfNLBFH9AFOYad7NyxjS1bt9LVGayok0lngPA8Yf9+JaMlsFTxAejRl2FMDU1zUzPtB9sZOWoUY8dPoCzsbdm7RKaEWAmQS1VNNZ7rlfhWkf8pByB6StjHbTt47LHHWbx4KZ1dXWGledCyQameyYeiZyqTTJMEcPFAjgeYCDVJkUmoJEqDbafI510ef3wha95cw1XTpzH1gqmYphlXDkQrnkbaLZfLsWfPHnbt2EZHRzu+8oP0KMJmPqGZFY5NpNZoVLiYfWjpIkp4j+j6hBnWzm3bRlPzAcaPH8+wYcNK2qz3D7rAVDRtK/DZgmkCo8gk7a3VIvaxq6uLp59+mkceXsCevXtJpzKk7BS+rwkW6tH0PqUueraJJIArmcWjwdyHclfg66CJTyadYc/evfz67l/z6muvMn36dCZPngyEixbKYBBrpTnQ3MyWLVvxvRxSBmuGR30lg4Fu9AkXaK3CVnaUgCZKEI61aTh+DWHR3d3N6tWraWlpYcKECZSVlfXU3BX3iKQnVzQOSUgRm8i9ARplivi+zyuvvMKCRx/ljVWrQBtk0tnAaNRRia2fDKIEcIcSXTTxBstFCV3aKC4wwYJi0tgfU0Hbc41m6UvLWbN2A5dccgmXXXYZ1VXlwWyvfEAzZGg9hgVvbdxER0cnpmEgTRGbWsXLF8f5mxgDX7HWsdlKEXDsMOVs/959tB88GLCZjUPi/MkSfzUyIREhwxk8g6h+L7pPI6zk3rO3iXnz5vLss8/FAXGtRTABIVEqWGO8eJKIbEqtFFoGC5+UXLQ+uhWeebRirdSwFH02CfKZdVzZLUTg7ylfxR24urtzPDR7Nq+88iqXX34Z55x9FqmUHZuZjY1DKCsrZ9fO3UE7vUIBaQZrhQdjVPerVQd33QHgekiVoC7urY0baD7QzMiRI6muro7N3qiDl+g9+HuB3rIsOjo6WPrSch5dsIDt27djmRaOU9oVTOOHulr3NzvEAXeK2psc7WBLTMojNDtjciU0uYQM4nFbtmzhjp/dwbKly7ju+o8ybtwYtFbk83mymSzHHnssdXV17Nixg9a21sBvClemiXo/Ht7Z7GvyGv2AVQiT1tZWOjo64iZE5eXlwXJb0ao8otQ3VCrKwYRVq1Yze/ZsVr6xGq3BsR185cc1c4ebG6J5JOrGnCw7nACuaLCpImsnYAx18bytS32paNYWkWZSOiZDAFasWMm2bds4f+q5XHjhhTQ2NuB5LoVCgdraWiorK9m/fz87duygkMuHGSygtfGO1bUqausQ5UI2Nzdz8OBBstksFRUVVFdXkwmbxBKzswLbsti/v5lFixax8MknaW1pwXKcwE+Lli+OAd0/wVI6N4jSzl0J3hLA9Roi8XT/dkJHSgU+jW2naGlp5Q9/uJ9ly17muutmcvrpp2KakkKhgGkYDB06lMqKCnbv2h2vERBoncNrj0OJFEVrpxYlXGut6e7ujtuo904y9jzF888v4U8P/ont27aFCc1OWJDbl/HsOe4Adm4iCeDejmsnjnj/oGBVCEkmk2Xnzl3cfttPWXb6KVx11ZWMGTMG31e4hQLpTIZx48dRXV3J7t17wjXEJdIQhxjDJQG+8BpFiXaOu+AJiecH7SFqamoYNmxYsKCHBtcthBkhJhs3bGD+/Md4Zflr5PM5UqlMrPmLu231B7jBmJeJHO2A6+3ji4Bx87UOWtFJSUlzbjGQKUrfGR9Q2osLQi3bwVea555/kTfXruXiiy/m4osvpqqinFzBRYoC1XUVlFeWsW9fM3t278N13eIu6kWDWxfF1yS985IjsMlwLQE/XM9tyJAh1NbWhsSJjwJS6QxtbQd5atFTPLZgAc0HWkmnslhOKlwYMmyzECYFiDAwL+IEmB5/U0oRrxceh+eLfDapQShVtHJkYl4e9aldOlxBRggdp1kdmR+o+9F1PelWtuNwoKWF3//u97z+2ut85NprOfHEDyAR5At5LNNmxIgRVFZWs3PHTtoOtsYLGBYfWxS1TTjUvQgpqaurY/jw4eEaAB6FgotpmUghee3113nggT+xdu1aHCdYw7wHNO+uyopaOiSkSQK4AAxR5ke0lrY4ct66P1Cgi/wpJTANCyebYv2GjdzyX//N2WefzUc+chUN9Q0o5VMouGSzGSYeM4Gmpib27NlDV1dXUVKy6JvFQU8wXIfB66qqKhobG6moqAKgUAgWUbRSFlu3bmf+o4/x0ksv0dHRgeOkkWF5TSkgIjX09sDXY9oGpIlpmCWZLAngjmKaZMKECZRly8LOxrKojYE+rGaM9IHo7/+6lD2USBRgGjaFvMvChU+xYf16pl1+OeeedzaplEPBLSAQNDQ0UF5ezr59+8ICTi/ICBE9JrGQwaqsvh9UODhO0Jq9oSEo33ELAYXvpCwKeY9nnnmWBx+azY6du0il00UxtV4aU4i4xYRP6URSZNwO+FSjZxdUP/S0fBg1alQf/++otaqOqr6UkQ8ngwZBaMHPf/kb5s6dS0V5FimNnuTGwRItWh8ScFqHSxaLnv+bpolXKOC6BY7/wHHccP1HOXbysWjl43o+pmkghKSttY1du3fR3n4QX3k9MbRoNSkhqaysikkRP0yoNk0H0xSsXbOeBx98iFWrVqEUaCHjvM+Y6hc9jm1JtUNYqSA0QTwt/K53H67oOUZJ35E29pXCK3hcO+Nq/v7G6xLAHZWAi9WSDv0WSS7v8uCDs1n4xON0dHbFDVZLzMJDMIZa92UPS/6lSxsBBURDcAwpBN25bqqqKrjkkg/yoUs/RF1tLZ7nx0Wxvu/RtH8/rQdayOVzKN9HaU1FRQW1dfXU1taBEHhuAaU16VSKtrZOHn30MRYsWEB7e3u4CAn4WsdJ0CK+3t6AC3/vSdkMYmq6F+/Uq1YuSlXTWtPV1UVNTS033DCTD11yUZhCJkjwdpR3Xi6Wdes28OCfHuK111YgkKTSaTylSgZW3B0Lv4ghVLGdGsXwtIp8FomB6gmUFy9SrxRSijBBWOG6LiNGDOfDH76K884/D8uA7nweIcE2TJTrk8vlgsXtTZOUk0LaFq4f1Kk5jkU+X2DJ4iXMn/84mzdvwnYcpJQxSHtr4+LOYoPS5gRJ1zqsjSsmcqSAfD6HlAZnnXUmM2dey8hRw5OBlQCur5OvVFBQ6rmK5557gQULHmPTps2YVlDGEg2uaAGNUpOxx7fRUbX2IACnokI4QEgD0zDI54Psk1NPO5Urpl3O+PFjw+RiFwmlANEaDwMpTUxTsnXLNubMmcPiJUvwvaDvStTYtqcpkeitjAclSg1sNgfrJLj4XoEJ4ydw9dVXc/Y5ZwZmpacwzIQwSQDXB3QqrM42EFJw8GAH8+Y+wuNPPEFnVyepVDqe53uvJFrMGqoYWDIqN0CK/gGnI0esqOI88tHyhQLZTIrzp57Hhz98FXU11WhcPNfD9dyg34lhIg2HAy0dPPXkkyxcuJDmA804thMSQEErBB32SOlLkPTDDcWmo+4HcD2J0lprDGngK5+u7m6qKiuYfsU0pk+/gmw2ExakBgs/JmZkArhDsCkiYBVDTbJ+w1vMnjOH5cuXh2Zb0EpOq/4rqvvTcEGtmI7VoS76pl+mDwPDEHjKwy3kGTd+HJdf9iFOOPF4ysvKsWwbCPykV199g0cefpS33norqNo2zXgtuT4m7wBMa3+A6ykX6uunChFo+3w+jzQkZ5xxJjOuuZrx48aG4EyavSaAO7zRFH6MGHRBuwIZZos8z7x589i0aROpVBrLdPo0Wx0M4HQR4PpNV9YCrQ2kDLWR0LhuHiElw4YNZ+TIkVRWVtLV1cmu3bvZunkbhXwhWPsgJHqCazl8QehADV2jdhHFoItr8ST4foFCvsCEiYH5eO45ZwfZLUVdpRNJADdISgB6ymACyjtKl2ptO8jcuXN44okn6c7lSYdmZsSriKK0pZ4nKlCix7crXqHHULr/ELuWRTVkOjY5Pd+PK7mj3iWWGZTUqKK16MK3yqGcNdHPX8WaMAg99IBOiOBZ5Lq7qaqu4LLLLmX69OmUl5XF1eOH65WZSAK4IyANesyktWvX8qeHZrPi9ZVoDabloFVItYu+vpovgmWHe4vh9w+4gQZsn7oyTdghS/dj9onDHq83cdTbbxNahiDSFNw8vvI444zTufbaGYwfPz4xHxPA/flBpzUYhqTgeTzz9LM8NHsOe/fsDRfFMGMtUcJGDlAAIJUevKlXqjYHAM3bA1xEiPTezpBBcD5f6GbM2LHMmPFhzj33nLDLsj/gegeJJIB714GHBInkQEsLc+Y+zLPPPEd7RwcpJxWuSur3mGqi/wC60IdUN/TOn+xvc13EHjIAyAaGW0/joihZOtpXa8h1d5HNZrjk4ouY8ZGrqaioiJOco8TqxHxMAPceeXxBD0YjbOG9Zu16HnjgQV57bQWGYeI4PS3QEeLI0qGPoLOc0roHuOLwZml/WrG4rZ6QErfgorXm1FNO5iMzruGYSRPCicYLe6cYyQBIAPfewi1gAWVAmKAxpYHrKRYtepa5c+exa9dOUqkUUhqH71cygEk5GDNyMCblgJiOagABKQ183yWXyzNmzFg+/OErOf+8c7EsGbKPPf5pArgEcH8R0MVmGcSLdQgRrO89Z84cnnsuaC1n21k0sgd48a7qkOTIYBZs5BCZ+33Ap0U4SQS9LwPm0ceU0NXdRTqV4uKLL+aaa2ZQXV0Zx/ACU1P3e+xEEsD95SBY1NMR4I03VvKH+/7A2vWbME2nZ6WdCEhCvyeAK/6fwERpHyGC/pme54L2OfHE45k5cybHHhs0tY3WTkgkAdz7GHChuRkWg1qWRXd3jkVPP8v8+Y+xZ+8eHNtBykOD6d0GXHG7cSmMwANVHl1dnYwaPZKrrpzOhRdMxbbtkrUSEkIkAdxflRTHqHbt2suDs2fzwgsv4Lou6XQa39NhWwf6rNN9KB+utByI/gtD+2k9FrW3y+W6SaUczp96HjNmXM2Q+vo+15tIAri/WjPT1xozHMgvv/Iqf7z/ft7a+BaOnS4hVd4p4Ppq257fDUPi+T5uocAxk47hhhuu46QTjgfAUx6GMBKNlgDub4deUSooxTGEoKs7xxNPLOSRRxaEiyOmkUXtHXSxrtJ9zcf+AKfDVVZ7EqONOByhtCafy1FbV8uVV17Bhz50CZm0g68UmmANc5EQIQng/tbNzG3btvPQg7NZunQZvq9Ip7L4ykfhhQ2CjJhZDFjFniyWnlemY38vXgYr5GOklGFGv8G555zLNdd8mFGjhyfmYwK4o8/MLM7sWPziSzz00Gw2b94aVGgb4boFYmDAxVksqECLFQFOSonveeTzecaPG89HP/oRzjr7jBhoCSGSAO6olKAXZrA+d/vBDh5//Enmz3+U1oMtpNJpBGaYuiXDEEJPK4dSZy1Y3yACUldXF9UVFVwx/Qouv/wyysvL8P1g32gtg0QSwB2NBmaodXpaJ2x6awuz587lpZeWARLLtFFxuCFcIrhXy7poYZ18Pg8aTj31VGZ+dAYTJiQZ/QngEinWceHPcIENX2OYQf/KxS8u5cEH57B501YcJ41pSbT2+jT7kVLE7OOwYcOYMWMG559/LqYhEvMxAVwi/Wm4IGufIvJDYEhBa2s7c+c9wpMLn6Sjs4tUOl3S/lwrRaHQRTrlcOEHP8jVV3+Y2prqQCPqRKslgEtk8FAsMgPXr1/Hw48s4NVXV9HR2RH3/kmn00w+djwfmXE1xx9/fGI+JoBL5J1I79zM1WvWsGLFCtraDlJRXs7kKVP4wHFTwjXegq7MCdgSwCXyDkEX9wvpt+mPiruMJb5aArhE3j3o9Sz9RE8CSqDREqAlgEvk3cbbAI1Rkkfz1ybJksN/FdNi8ggSwCWSgC6RI5bEKEkkkQRwiSSSAC6RRBJJAJdIIn89ckSkSXFjm8MlxmrdT4XyIPYrFt/3SxYUFEULRkTB3sEcK7ru4hYGA8lgjjm4Bj8M+jylRaWDf769e1FG93ckQfD+zj2Y6z7ceaJMmehZRdtH7+3tZMUUjwPP8+L+MINbP0GXLP0ca5y3mZ3zdo/zjuJwf65219FLOtxN+H6Qcf9ut3R7P/fOL+6U/H6U3ilp73S7/saGlJJHH32U9vZ2rrvuunc0Dt/Ovu/kfIPWcLlcjqampjirPZvNUlNTc8iTd3d309zcHH+vlKK2tpZMJnPIWSMa6K2traxcuZI333yT7u5ulFKkUimOPfZYTjzxROrq6uLjHkojdHZ2cuDAgUNuI4TAsiyqq6sxTbPPcaP77H1Pb3dCqampIZvNAtDV1RUfUwiB7/vU1tbG3/e+ToCWlhba29vjASuEoKGhIb72wYjneezfvz+euA6n2XzfJ5PJxM+9v4nKMIxg+WbPY8OGDaxatYp9+/bFa5NPnDiRE088kSFDhsTXPtik62iyKRQK3HPPPbS0tDBt2jTKy8sHBYJCocD+/fvjc6bTaerq6o4IQNG2LS0tdHR0BGuoK0V9fT2pVGpQBzikeJ6ntdb6scce09XV1bq+vl5XV1fryZMn61WrVmmttfZ9v2Sf6O/HH39c19TU6IaGBj1kyBBdWVmp77nnnpLjRlIoFOL9lixZov/pn/5Jjxs3Tougx3bJRwihR40apT/xiU/oZ599VmuttVKqzzGjvx966CFdVVWl6+vrdV1dXb+fhoYGPXr0aH3mmWfqf/mXf9FLly6Nj+u6bnysBQsWxM9hoGMd6jNkyBBdUVGh77zzzvg6H3/8cV1dXR1fR0VFhf7d737X73OK/v73f/93XVFRoRsbG3Vtba0eP3683rRpU7/vo7dE369fv16PHj06Pndtbe2An+i6rr322vgYSqmSZ6S11lu3btXf+c539Kmnnqqz2WyfdwfoYcOG6RkzZuh58+bF15TP5/Vgx+LLL7+shw4dqtPptH7iiSf6XM9A97t8+XLd2NgY3+uYMWP0yy+/3O9z7k9c19VKKb1u3To9ZcoUXV1drYcMGaKrq6vjcXi4Zz9owM2ePbvPg7vwwgt1Pp/Xvu+XnCjaZ968eX32ueOOO2KA9X4gHR0detasWdpxnJJ9TNPUlmVpy7K0aZraMIz4O8uy9Oc//3nd0tLS54aj6/j973/f74s/1Me2bf1v//ZvOpfLad/34wHV33N4O59bb701vs5HHnmkz/d33XXXIQE3a9asePIBdHl5ud6wYcOgXnp0jDVr1uh0Oj2o643Oc9FFF/U5R/T7XXfdpYcNG1ayn2EYJe+u9wR6zTXX6I0bNw7qupVSWiml/9//+3/x/jfffLP2PE8rpQbcP7rfJUuWxOePfp577rm6vb09Psahzu26rvZ9X1955ZUlxwD0woULBwXcQTsphmHEfo2UEsuyePrpp/nOd74Tq9W+FcmBg2wYBqZplvhFkZkWmRPNzc1ce+213HrrrXieh23bWJaFaZqxg+y6Lp7nBat/WhaWZeH7PrfddhvXXHMN+/bti6+lv2s3TfOQZSyGYWDbdtyF+Ec/+hGzZs0qMTeklPH9ROZT8aeYFIi2Lf7Yth1v15uIiL4fjP8YnSd6rtHPI/Ypwv2Kr72/T/H77+2HSSn5+te/zk033cSuXbtwHIdUKoVt2yilSt6dlDL+zrIsZs+ezaWXXsrKlSvjtef0AP04hRDs2LGDefPmxde1cOFC1qxZM6h7j8ZttK9pmrzwwgv88Ic/xDCMQ5JhSilM0+TOO+/k4YcfxrIspJR9xvW7GhaIfCylVPzwfvjDH/L4449jmma/vkC0fX9sWPT/QqHAZz/7WR577DFs2463jV5SOp1mxIgRjBgxgmw2S6FQwHXd+DiWZfHMM8/wyU9+ku7u7n7P1XtpphEjRjBp0iQmTJjAxIkTGTNmDEIICoVC/HJN0+SOO+7g0UcfjX0j3/fxw+V/o9+jT3Q/xWxo720KhQK+75dcf+9nO1jmsJjB7W/CO5Q/NtB5TdPEtu1+J5RoqeNiH1BKyX/+53/ywx/+ENM0MU0TpRS5XI5CoYAQgsbGxnh9ct/3yeVy8fOwLIu33nqLmTNnsmXLlpiB7O/6ABYuXMgbb7wR/3/Tpk3Mnz//iAid4mMahsEtt9zC888/j2EYfcZw1LreMAxWr17NN7/5zXhi6P3O3/WwQH8zjuu6/PM//zNPP/00I0aMOCKKOXrBd955Jw888ACO48Qv0XVdJk6cyKc+9SkuueQShgwZghCCpqYmFi1axJ133smaNWswTRPXdTFNk0cffZSf/OQnfPWrXx1wtpJS4nket9xyC9OmTSOfz8f3sWbNGr797W+zaNGiEi3061//mmnTpiGE4Mwzz2Tu3LnxACw+7n/8x3+wfPlyLMuiUCgwatQobrnlFhzHKSFgXNfluOOOi4mE94NERMff//3f8+Uvf5l8Pt+HQfQ8j4qKinigWZbFq6++yre//e34WWmt8TyPqqoqPvnJT3LttdcyatSomHBaunQpv/zlL3n22Wfjges4DuvWrePf//3f+e1vf9sn3BERae3t7cyZM4dCocDIkSPJZDKsW7eO2bNn84lPfILGxsYjGvzRPXR1dfEv//IvLFq0iIqKihISJ7qWXC7Hl770JZqbm7Ftm0Kh8LaBMyh7P/LHhBAlH9M0NaBnzpwZExeRfxb5JkKI2O/6+c9/HvtwSind3NysJ0yYEG8THe/SSy/VO3bsGPC69u3bp6+66qrYTzAMQ0sp9dChQ/XOnTtjJ1drrf/4xz/G20XHf+yxxwY87vjx42P/ENAjRozQ+/fvP6xTfcUVV2gg9kFPOOGEQ24fPaf58+drQEsp43Pedddd2vM8nc/nted58Sf6+0tf+lLs3wK6srJy0D5c9P2aNWt0WVlZyXG+/vWvH/Y+fd+PfZ6ZM2fGPm907ZMmTdLLli075H1/85vfjM8bvT/HcfTzzz8/oC++cOFCXV1drQH9rW99S99yyy1aCKFTqZS+7777Brz3aP+lS5fG9xn5X4ZhaNu2NaBnzZpVsr3v+/E7+sEPfhCPCSll7LtFvy9atOjd9eEOFQC1LIv777+fn/zkJ/2q5YFml8gG37hxY3wsz/M47rjj+M1vfsPw4cPxPK+PGeC6LvX19dx9992ccsop8bGklOzevZvHHntswAB1sakXna/YhK2vr+e8884r2batrY2WlpZ+TcRi8zKa9aLzKqXo6Ojo1wQtDn/0Z+6l0+kSn6+3D2jb9p9F07mui1IqNn37M5sjjbhu3ToeffTROFTk+z5lZWXcfffdnHbaaRQKhT7vLvLBv/3tb/Pxj38cz/PisZTP5/ntb3/b531FmvChhx6ipaWF4cOH88EPfpCpU6cyYcIEcrkc8+bNo6urq6TR0pGEaUzT5LbbbmPBggUYhoHrurHJu2zZMr7//e/H1/EXSe0qBlxk23/zm99k+fLlg4pHRANr0aJFfeJjX/7yl6mvr6dQKMRER7RNRER0d3dTXV3NrFmzSjIQhBA888wzbys4HG3fGwjFPkREIPT36e98R7Jt8UT05ptvsnTpUp577jleeOGF+PPcc8+xdOlStm7d2m8mz7sl/REoEREUnXPp0qV0dHTE96OU4sYbb+TMM8+ku7u733cXkWBaa/73//7fVFVVxYNYCMGLL75IZ2dnfJ7ova5Zs4bHH38cgMsuu4y1a9fy4osvctVVV8W+3SuvvHJEz6R4oogm0y996Uvs27cvdim6urr413/9V9rb2+NreieZRu8oleLGG2+kuro6dj4PHjzI5z73WQ4cONBnkPY3EH3fjx3gaLBVVVVx4YUX9nHQez+oiFz54Ac/SENDQ/zQtNasX79+wCyGYlAVs28RSdLR0cGSJUtK9qmsrKSmpuY9ydKI7uO73/0uZ511FlOnTuW8886LP1OnTuWss87ivvvuO4J15I6MtYyAEQEs+hSnogG8+eabfVb9ueaaa2KrZyDmzrIstNZMmjSJM844o4Ro2r17N83NzX32WbBgAZs2baKsrIypU6cye/bs2MIZMmQITU3ByrPFY2kwcuGFF5LNZmN/bu3atXz1q1+NJ/Yf/OAHLF68OGZcHcfhggsueNuJD/Ltajff97nqqqv41re+FefM2bbNyy8v5+tf//ph8xaFEORyOQ4cOFAChLFjx8YEyaGyQqIBUFdXx8iRI0u+P3DgAK7r9rt/dE35fD5m07q7u2lvb+e1117jxhtvjMmYCLCnn3469fX170kbut7aeqDPu63dIs364IMPcvXVVzNt2jSmT5/O9OnTufLKK7niiiv4+Mc/zoEDB+Lnsm/fvhIT3bZtGhsbD0uTF2fujB07toSE6+joiAEXPe/du3fz0EMPAXD++ecDsGXLFg4ePMiBAwe4+OKLAXj00UdZu3btoN5RpK1mzpzJrFmz4jFsGAb33nsvDz/8MEuXLuVHP/pRTJAppbjpppu46aabDqkQ3nWWMnrh7e3tfP7zn+fhhx/miSeeiONmv/jFL7jqqquoqqoaMPdsIDBF1PJgTULLsmJ/JnrQkclyKHb1a1/7Gj/84Q9jv6Srq4vNmzfHplDxhPGP//iPf1bz7VBpTO/l+YQQbNy4kY0bN/a7TSaT4Uc/+lFJqt47uV6tdR9f1PM8crlcyTGfeeYZVqxYgWmaXH755SxZsoQPfehD1NXV8dxzzzFt2jTmzJnD+vXreeyxx5g8efKgcx593+cb3/gGf/rTn1i7dm28NPSsWbNIpVLk8/mYlRw5ciTf+973mDt37ntrUvZW27feemtMcESa54tf/CLLli3rQ58Xz6iO41BeXl7y/927d9Pa2npIs6A4TtXe3k5TU1PJ9mVlZYedfdatW8eSJUtYtmwZy5cvj/M1owEQEQc333wz06dPf9sz2tv1jaOJpz//z7KsP8u1RGZVOp2OEwBs28ZxHGzbprq6umT74glVSkmhUKC9vf2wfk6xFo+0WTTB2bYd55BKKenu7mbOnDl0d3dz/PHH09jYyKpVqzj11FM56aST2Lt3L1JKzjrrLJRSzJs3j/379w/a5Ovq6iKTyfA///M/sdkohGDTpk28+eabsSaMzMvKykq6u7v/Mj5c9NInT57MLbfcUpJ5sGnTpjiCfyhmaNy4cSVlN7t27WL16tWHfWkR07d27Vq2bt1aYkaMGjUqzkIpniAGCihH9npx0DWTyfCVr3yFW2+99T3TNpFPGREKy5Yt44UXXmDx4sXx5/nnn+ell17ihhtu6Jfgeafnd12X7u5uCoVC/Mnn8xQKBQ4ePFjyLCJzsPg6li1bFvuWA72/aFC3tbXx0ksvlXxXU1NDQ0NDfMzly5ezaNEiAC6//HJWrlzJ0KFDWbduHU899RRTpkxhyZIlXHzxxRiGwcsvv8wzzzwzqFKsaAxrrbnkkkv44he/2Ged84ixvOmmm/jYxz4W+6dv20d+N15Ud3c3M2fO5LnnnuP222+PL6i5uTkeyP1lmQCcddZZ3H///TFQfd/njjvuiB3T/vymCGxCCH72s5/FbGYE3NNPP73kHMWAjvYrLy+P06ja2tpwXTcOxLuuy1e+8hX+7//9vzEA36tymOg8xxxzDCeffPKA2w0dOvRdva7o2V988cVcd911FAqFkjQ8pRSZTIbKysr4nZx88slxKl207V133cVNN91ERUUFruv2y/h6nofjONx3331s3LixxIWYPHky9fX18YQ7Z84cmpqaGDFiBCeccAJ33303U6dOZf78+Wzfvp1Zs2YxZ84czjvvPKZMmcIbb7zBQw89xJVXXonjOIMCXcRJfPOb3+S5557jpZdeiq/JdV2mTJnCd77znTjj5C8SFujtd2mt+cEPfsDJJ59ckrY0UOpL9Pfll19OVVVVSWlOFNOLmLIoFSpK9YrSj+644w5+85vflORyOo7D5ZdfPuBgjLb97ne/y+uvv87rr7/O7bffHs9mkcybNy8uR/pLSETqRHGx6BPFtorTn95NoJ9xxhl86lOf4nOf+xw333wzN998M5/5zGf47Gc/yyc+8QkymUy87amnnsoHPvCBkne3evVqvva1r8UxrOhao3cnhMBxHJYtW8a3v/3tktCS1poZM2bE72HTpk1xTPWiiy6KCTbbtnn99dfZvn07LS0tDB06lPXr1zNt2rQ41PT666/3LJAyCNB5nkd5eTn/9V//RTqdxvO8eKzdeuutNDQ0xM/8nVg88t2aHbXWlJeX85Of/ISKiorD0rMRkCZNmsS1115b4iMJIZg1axZf+MIX2Lx5c0mysmmabNu2jS9/+ct88YtfjAdilA521VVX8Xd/93eHZRQbGxsZPnw4w4YN41Of+hQXXXRRrDkNw+CVV17hxz/+8aAD+e82WVIc9yr+FCcZ/7mAXpzz2ftTrBHKysr4whe+UPKuDcPgjjvu4Nprr2XFihVxiCF6d21tbdx5551cddVV7N69uyTh4dhjj+W6666LzbqFCxeybt06stksF1xwAc899xynnHIKK1asoLOzE601L774IqeccgrLli3jhBNOYPjw4ezfv5/Zs2cfkckdvedzzjmHRx55hLvvvpt77rmHuXPncskll+C6bsn4/IualMUAOuecc/jWt77Fl770pUENVqUU/+f//B+eeuopNm/eHDuuWmtuu+027rvvPs4++2yGDx+OlJLt27ezdOlS9u/fX5KZ73kew4cP53vf+96gsg0izeG6Lo7j8B//8R+8+OKLcW6lYRjcfvvtXHfddRx//PFHzco0xZr+UOZT9L5vvPFG7r//fp544onY0rFtmzlz5vDUU09x9tlnM27cOGzbpqWlJSaoIk1V7B5897vfpaamBt/3aW5u5o9//CO+73PmmWcihGD//v1MnTqVu+++O/axli5dyhVXXAHA/v37ufjii7nnnnt4+OGH+eQnP8mxxx57RIFw3/f54Ac/2Ef7vZ0MlrcFuIF6kwx0wZ7n8fnPf55nnnmGefPm4ThOnIE/0KwyZswYfv3rX3PttdfS1NQUB7Wjsp2HH36433BAxKrlcjkqKyv5xS9+wcSJE2NToDdp0l8sL8p8OOecc/iHf/gH7rjjjriEo6WlhW984xvMmTOnxNk/0p4hf6vAjMzDX/ziF1xxxRWsWrUqnjAty6K9vT3ODumPbIt+LxQKfP/73+cjH/kIrutiWRbLly9n1apVlJeXc/nll/Pyyy8zadIkNmzYwK5du2Ifq6uri8WLF3PSSSexePFiLrvsMh555BE2b97M008/zbHHHjvo+4lA1VtJ9CbU3hMfrr+UpoH8MsuyuP322xk9enT8AAfaJwLd1KlTmTt3LhMnTozLbyJ6vJiijuqoIvIkl8sxfvx4Zs+ezeWXX96vo364a4/Mmq985Suxwy6lxLZtFixYwPz58+N6qUOBrb/6t3fr2b5b5+pv8Peu5zsSq0YpxahRo3j44Yc5//zzKRQKcRw0ipH2fneRdiwUCliWxX//93/zjW98I2auAaZMmcI999zD/PnzOfnkk1m1ahWTJk2KfbrIx4p8toaGBvbv3086neaRRx7h/vvvj4PkxeTPYMbwu7HNOwZclMwZOcDFybr9mRojRozgxz/+cezoR/vk8/k+M7+Uklwux9lnn83zzz/PN77xDUaOHBm/vGKKOjqW67oMHz6cr371qzz//PNceOGFcWJsb4n8kWj/4uuIzu95HuPHj+drX/sanufFVLjv+3zhC19g586dhzWRo0TlqN6rra3tiJ6t67olPtTh4kfRffi+T2tr6xGneSmlaGtrKzlOV1fXEWnv6H2PGTOGBQsWcOuttzJp0qR4nAz07jKZDNdeey1PPvkks2bNiifYaOCOHDmS6dOnc95557F48eK4B8qBAweor6+noaGB+vp6hgwZglKKpqYmTj75ZBYuXMiZZ57JlVdeyXHHHdfHNOztoxaPg8FK8XgqfneDmlwP17XL9/04rvbwww+XZHNceumlHHfccf2ykJFZ98ADD7Bjx46Ybr/ooos48cQT4xq24v2Kadfdu3fz1FNPsWzZMjZu3Bg7ydlslvHjx3Paaadx0UUXMWLEiHjw9EdBCyFYt24d8+fPj30+pRTTpk1j0qRJfQpG29vbuffee8nn8/H15fN5pk+fzuTJk/utYYv2nT17Nps3b47N2bq6Om644YYB4zbRud966624xi56oVdccQVTpkzpc1+Rln322Wd55ZVXYj/Itm2uv/76ODh9qBm3uMr+D3/4Q+yjFAoFTj31VM4///wBqxkOd0wImj89+eSTLFmyhA0bNtDR0RGn/jU2NnLiiSdywQUXcMopp/R579Fzicbdnj17uP766/nYxz7GqaeeyoYNG0o0cRQ7HDFiBM3NzXz/+9/npz/9KSeffHJ8D9H72bNnDw888EBJoD66jsH46NGEvmrVKhYuXBi7Nb7vM2PGDMaMGXPY7JbDAq53J62BBk1/LyCihvsD8UD5dhHr2HtQD/RAoocw0E2+nT6NA21/qOv+c7UMPBSLebiB/3bv8+34qsVA6W9C6m8MDdQOsbga+5e//CU333wzEyZM6JPpUlycqrWms7OTVatW8dWvfpXvfe97JfdwqOcy2Hd3uPaNgznOoFjK/jIHogcy0MmLo/S9/aVDvcxiLVT84ovjNcWxvcPZz72vPRqwh7r2KAheXPU7GP+mt1kR+VmHk959PKJzH2rf/np/DDZcUJxx09tELk4MfztESqTdi6+tuHynOBvpUOeJGMN9+/Zx2mmnxRXp/RFR0TgpLy/njDPOoLOzk7a2Nqqrq0sSwXuP4eJ3fCTP7kixcEQa7v0k75UWSeQv/86iSSHqRzpYQERASKVS75v2FX+1gEskkb/2yTlZkDGR9z1w/pYkAVwi72v5W3MhkuWqEkkkAVwiiSSASySRRBLAJZJIArhEEkkkAVwiiSSASySRo0b+f0XWngbTSaIQAAAAAElFTkSuQmCC" alt="North Foam"></div>
+      <h1>Costeo FOAM Integral</h1>
+      <div class="sub">Consola de costeo · v2</div>
+    </div>
+    <ul class="navlist" id="navlist"></ul>
+    <div class="navfoot">Captura en <b style="color:#5b9bff">azul</b> · cálculo en blanco.<br>Guardado en este navegador.</div>
+  </nav>
+  <div class="main">
+    <div class="topbar">
+      <div class="save"><span class="dot" id="dot"></span><span id="saveTxt">Guardado</span></div>
+      <div class="actions">
+        <button class="btn primary" onclick="app.exportExcel()">Exportar a Excel</button>
+        <button class="btn" onclick="app.exportPDF()">Exportar a PDF</button>
+        <button class="btn" onclick="app.exportJSON()">Respaldar datos</button>
+        <button class="btn" onclick="document.getElementById('imp').click()">Importar</button>
+        <input type="file" id="imp" accept="application/json" style="display:none" onchange="app.importJSON(event)">
+        <button class="btn ghost" onclick="app.reset()">Restablecer</button>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="chain" id="chain"></div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ===================== DATOS BASE (fieles al Excel v2) ===================== */
+const CENTROS=["Corte/Pegado/Ensamble","Empaque y Almacén / Manejo","Administración"];
+const CENTRO_PROD="Corte/Pegado/Ensamble";
+const PROCESOS=["Corte/Pegado/Ensamble"];
+const TIPOS=["Directa","Administrativa","Comercial"];
+const PERIOD=["Semanal","Mensual"];
+const CLASES=["Directo","Indirecto variable","Indirecto fijo","Administrativo","Comercial","Logístico","Financiero"];
+const COMPONENTES=["Tapa / Base","Tapa","Base","Frente / Atrás","Lateral","Divisor","Refuerzo","Inserto interno","Extra"];
+const TC_OFICIAL=16.9710, TC_OFICIAL_FECHA="11-sep-2026";
+
+const DEFAULTS={
+  control:{escenario:"Base", tcBase:16.9710, margenObj:0.35, vigenciaMeses:3, tcFecha:null},
+  escenarios:{ // factores por escenario — valores North Foam
+    tc:{Base:1,Conservador:1.05,"Estrés":1.135},
+    materiales:{Base:1,Conservador:1.05,"Estrés":1.15},
+    rendimiento:{Base:1,Conservador:0.95,"Estrés":0.88},
+    merma:{Base:1,Conservador:1.5,"Estrés":2.5},
+    volumen:{Base:1,Conservador:0.90,"Estrés":0.70},
+    utilizacion:{Base:1,Conservador:0.88,"Estrés":0.71},
+    energia:{Base:1,Conservador:1.08,"Estrés":1.20},
+    nomina:{Base:1,Conservador:1.05,"Estrés":1.10},
+    flete:{Base:1,Conservador:1.10,"Estrés":1.25},
+    tiempoCiclo:{Base:1,Conservador:1.10,"Estrés":1.25},
+    tiempoPrep:{Base:1,Conservador:1.15,"Estrés":1.35},
+    retrabajo:{Base:1,Conservador:1.5,"Estrés":2.5},
+    rechazo:{Base:1,Conservador:1.5,"Estrés":2.5},
+    mantenimiento:{Base:1,Conservador:1.15,"Estrés":1.40},
+    consumibles:{Base:1,Conservador:1.08,"Estrés":1.20},
+    garantias:{Base:1,Conservador:1.5,"Estrés":3.0},
+    precioVenta:{Base:1,Conservador:1.00,"Estrés":0.95},
+    financiero:{Base:1,Conservador:1.5,"Estrés":2.5},
+    deltaMargen:{Base:0,Conservador:0,"Estrés":0} // p.p.
+  },
+  capacidad:{dias:26,turnos:1,horas:9,comida:1,festivos:0,vacaciones:0,ausentismo:0,mantenimiento:0,setups:0,paros:0,horasUsadas:null},
+  moParams:{isn:0.018,infonavit:0.05,imss:0.24,aguinaldoDias:15,vacDias:12,primaVac:0.25,otros:0,semanas:4.333},
+  empleados:[
+    {puesto:"Encargado",tipo:"Directa",centro:"Corte/Pegado/Ensamble",period:"Semanal",sueldo:4000,n:1,uniformes:0,capacitacion:0,ausent:0},
+    {puesto:"Operador",tipo:"Directa",centro:"Corte/Pegado/Ensamble",period:"Semanal",sueldo:3700,n:1,uniformes:0,capacitacion:0,ausent:0},
+    {puesto:"Operador (adicional)",tipo:"Directa",centro:"Corte/Pegado/Ensamble",period:"Semanal",sueldo:3700,n:0,uniformes:0,capacitacion:0,ausent:0},
+    {puesto:"Contabilidad",tipo:"Administrativa",centro:"Administración",period:"Mensual",sueldo:4000,n:1,uniformes:0,capacitacion:0,ausent:0},
+    {puesto:"Compras",tipo:"Administrativa",centro:"Administración",period:"Mensual",sueldo:null,n:1,uniformes:0,capacitacion:0,ausent:0},
+    {puesto:"Ventas (sin comisión)",tipo:"Comercial",centro:"Administración",period:"Mensual",sueldo:null,n:1,uniformes:0,capacitacion:0,ausent:0}
+  ],
+  maquinaria:[],
+  indirectos:[
+    {c:"Renta de almacén / nave",cl:"Indirecto fijo",ce:"Administración",m:54000},
+    {c:"Predial / seguro inmueble",cl:"Indirecto fijo",ce:"Administración",m:null},
+    {c:"Mantenimiento de instalaciones",cl:"Indirecto fijo",ce:"Administración",m:null},
+    {c:"Internet",cl:"Indirecto fijo",ce:"Administración",m:570},
+    {c:"Agua",cl:"Indirecto variable",ce:"Administración",m:300},
+    {c:"Telefonía",cl:"Administrativo",ce:"Administración",m:null},
+    {c:"Consumibles (grupo)",cl:"Indirecto variable",ce:"Corte/Pegado/Ensamble",m:null},
+    {c:"Cuchillas",cl:"Indirecto variable",ce:"Corte/Pegado/Ensamble",m:null},
+    {c:"Hilo caliente",cl:"Indirecto variable",ce:"Corte/Pegado/Ensamble",m:null},
+    {c:"Adhesivos",cl:"Indirecto variable",ce:"Corte/Pegado/Ensamble",m:null},
+    {c:"Bolsas",cl:"Indirecto variable",ce:"Empaque y Almacén / Manejo",m:null},
+    {c:"Etiquetas",cl:"Indirecto variable",ce:"Empaque y Almacén / Manejo",m:null},
+    {c:"Cajas",cl:"Indirecto variable",ce:"Empaque y Almacén / Manejo",m:null},
+    {c:"Tarimas",cl:"Indirecto variable",ce:"Empaque y Almacén / Manejo",m:null},
+    {c:"EPP (área general)",cl:"Indirecto fijo",ce:"Administración",m:200},
+    {c:"Papelería",cl:"Administrativo",ce:"Administración",m:200},
+    {c:"Software",cl:"Administrativo",ce:"Administración",m:null},
+    {c:"Servicios profesionales",cl:"Administrativo",ce:"Administración",m:null},
+    {c:"Control de calidad",cl:"Indirecto variable",ce:"Corte/Pegado/Ensamble",m:null},
+    {c:"Almacenamiento",cl:"Logístico",ce:"Empaque y Almacén / Manejo",m:null},
+    {c:"Vehículos / combustible",cl:"Logístico",ce:"Empaque y Almacén / Manejo",m:null},
+    {c:"Flete al cliente",cl:"Logístico",ce:"Empaque y Almacén / Manejo",m:null},
+    {c:"Garantías / devoluciones",cl:"Comercial",ce:"Administración",m:null},
+    {c:"Gastos administrativos generales",cl:"Administrativo",ce:"Administración",m:null},
+    {c:"Contingencia comercial (configurable)",cl:"Comercial",ce:"Administración",m:null}
+  ],
+  energia:{precio:4.0,cargoFijo:100,demandaKW:0,cargoDemanda:0,reciboReal:null,
+    cargas:[
+      {n:"Máquina de corte (220 V)",kw:2.3,h:150},
+      {n:"Clima / aire (nave)",kw:10,h:200},
+      {n:"Iluminación de nave",kw:2,h:234},
+      {n:"Equipo de cómputo / oficina",kw:1,h:234}
+    ]},
+  financiero:{activar:true,diasInv:0,diasCliente:0,diasProveedor:0,tasaAnual:0,comision:0,difCambiario:0,reservaFX:0},
+  inserts:[
+    {id:"160143",q25:33.6109,q26:45.62,diseno:{
+      materiales:[{nombre:"PE BLANCO #1.2 - 1.5\""},{nombre:"PU GRIS #1.44 CONVO - 1.5\""},{nombre:""}],
+      piezas:[
+        {comp:"Tapa / Base",m1:18,m2:6,grosor:1.5,mat:1,cant:6,piezasManual:null},
+        {comp:"Lateral",m1:18,m2:15.375,grosor:1.5,mat:1,cant:4,piezasManual:null},
+        {comp:"Tapa / Base",m1:20.5,m2:20.5,grosor:1.5,mat:2,cant:2,piezasManual:null},
+        {comp:"Lateral",m1:18,m2:15.375,grosor:1.5,mat:2,cant:4,piezasManual:null}
+      ]}},
+    {id:"160145",q25:35.4563,q26:106.79},
+    {id:"160147",q25:9.0909,q26:19.21},
+    {id:"160153",q25:2.7232,q26:4.50},
+    {id:"160198",q25:5.4688,q26:11.15},
+    {id:"160203",q25:3.4575,q26:7.32},
+    {id:"160228",q25:22.7425,q26:51.98},
+    {id:"160229",q25:16.5306,q26:28.25}
+  ],
+  catalogo:[
+    {nombre:"PE BLANCO #1.2 - 1\"",grosor:1,ancho:48,largo:108,costo:13.12},
+    {nombre:"PE NEGRO #1.7 - 1\"",grosor:1,ancho:48,largo:108,costo:13.46},
+    {nombre:"PE BLANCO #1.2 - 1.5\"",grosor:1.5,ancho:48,largo:108,costo:19.6873},
+    {nombre:"PE NEGRO #1.7 - 1.5\"",grosor:1.5,ancho:48,largo:108,costo:20.1899},
+    {nombre:"PE BLANCO #1.2 - 2\"",grosor:2,ancho:48,largo:108,costo:26.25},
+    {nombre:"PE NEGRO #1.7 - 2\"",grosor:2,ancho:48,largo:108,costo:26.92},
+    {nombre:"PE BLANCO #1.2 - 2.5\"",grosor:2.5,ancho:48,largo:108,costo:32.81},
+    {nombre:"PE NEGRO #1.7 - 2.5\"",grosor:2.5,ancho:48,largo:108,costo:33.65},
+    {nombre:"PE BLANCO #1.2 - 3\"",grosor:3,ancho:48,largo:108,costo:39.37},
+    {nombre:"PE NEGRO #1.7 - 3\"",grosor:3,ancho:48,largo:108,costo:40.38},
+    {nombre:"PU GRIS #1.44 BUN - 45\"",grosor:45,ancho:83,largo:98,costo:1999.99},
+    {nombre:"PU GRIS #1.44 CONVO - 1.5\"",grosor:1.5,ancho:40,largo:96,costo:32.13}
+  ],
+  perInsert:{ /* id -> {mermaMat, margenObj(null=default), garantia} */ },
+  presupuesto:{otrosFijos:0,meta:null},
+  ruta:[
+    {ins:"160143",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
+    {ins:"160145",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
+    {ins:"160147",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
+    {ins:"160153",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
+    {ins:"160198",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
+    {ins:"160203",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
+    {ins:"160228",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
+    {ins:"160229",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0}
+  ]
+};
+
+/* ===================== ESTADO ===================== */
+const KEY="northfoam_costeo_v2";
+let S=load();
+ensureEscenarios();
+migrateCentros();
+sortInserts();
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function load(){
+  try{const r=localStorage.getItem(KEY); if(r){const p=JSON.parse(r); return Object.assign(clone(DEFAULTS),p);}}catch(e){}
+  return clone(DEFAULTS);
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S)); flashSaved();}
+  catch(e){document.getElementById('saveTxt').textContent="No se pudo guardar en este navegador";}
+}
+let savedTimer;
+function flashSaved(){
+  const t=document.getElementById('saveTxt'),d=document.getElementById('dot');
+  t.textContent="Guardado"; d.style.background="var(--green)";
+  clearTimeout(savedTimer);
+}
+function touched(){
+  const t=document.getElementById('saveTxt'),d=document.getElementById('dot');
+  t.textContent="Guardando…"; d.style.background="var(--amber)";
+}
+
+/* ===================== MOTOR DE CÁLCULO (espejo del libro) ===================== */
+function num(x){const v=parseFloat(x); return isFinite(v)?v:0;}
+let __escOverride=null;
+function esc(){return __escOverride||S.control.escenario;}
+function computeFor(scn){const p=__escOverride;__escOverride=scn;const R=compute();__escOverride=p;return R;}
+function f(lever){
+  const L=S.escenarios[lever]; if(!L) return lever==="deltaMargen"?0:1;
+  const v=L[esc()]; if(v==null||v==="") return lever==="deltaMargen"?0:1;
+  return num(v);
+}
+function ensureEscenarios(){
+  if(!S.escenarios) S.escenarios={};
+  for(const k in DEFAULTS.escenarios){ if(!S.escenarios[k]) S.escenarios[k]=clone(DEFAULTS.escenarios[k]); }
+}
+
+/* --- Costeo de placas por inserto --- */
+function catFind(nombre){return (S.catalogo||[]).find(m=>m.nombre===nombre);}
+function ensureDiseno(ins){
+  if(!ins.diseno) ins.diseno={materiales:[{},{},{}],piezas:[]};
+  if(!ins.diseno.materiales) ins.diseno.materiales=[{},{},{}];
+  while(ins.diseno.materiales.length<3) ins.diseno.materiales.push({});
+  if(!ins.diseno.piezas) ins.diseno.piezas=[];
+  return ins.diseno;
+}
+function matEff(slot){
+  slot=slot||{}; const c=catFind(slot.nombre)||{};
+  const pick=(v,cv)=>(v!=null&&v!=="")?num(v):(cv!=null?num(cv):0);
+  return {nombre:slot.nombre||"",precio:pick(slot.precio,c.costo),largo:pick(slot.largo,c.largo),
+          ancho:pick(slot.ancho,c.ancho),grosor:pick(slot.grosor,c.grosor)};
+}
+function disenoCalc(ins){
+  const d=ins.diseno; if(!d||!d.piezas||!d.piezas.length) return null;
+  const mats=(d.materiales||[]).map(matEff);
+  const piezas=d.piezas.map(p=>{
+    const M=mats[(num(p.mat)||1)-1]||{precio:0,largo:0,ancho:0};
+    const m1=num(p.m1),m2=num(p.m2);
+    const o1=(m1>0&&m2>0&&M.largo>0&&M.ancho>0)?Math.floor(M.largo/m1)*Math.floor(M.ancho/m2):0;
+    const o2=(m1>0&&m2>0&&M.largo>0&&M.ancho>0)?Math.floor(M.largo/m2)*Math.floor(M.ancho/m1):0;
+    const ppp=(p.piezasManual!=null&&p.piezasManual!=="")?num(p.piezasManual):Math.max(o1,o2);
+    const costoUnit=ppp>0?M.precio/ppp:0;
+    const cant=num(p.cant);
+    const areaP=m1*m2, areaPl=M.largo*M.ancho;
+    const aprov=(areaPl>0)?(ppp*areaP)/areaPl:0;
+    return {...p,o1,o2,ppp,orient:(o2>o1?"Orient. 2":"Orient. 1"),costoUnit,costoInserto:costoUnit*cant,aprov};
+  });
+  return {mats,piezas,totalUSD:piezas.reduce((a,p)=>a+p.costoInserto,0)};
+}
+
+function compute(){
+  const R={};
+  // TC
+  R.factorTC=f("tc"); R.tc=num(S.control.tcBase)*R.factorTC;
+  // Capacidad
+  const cap=S.capacidad;
+  R.capTeorica=num(cap.dias)*num(cap.turnos)*num(cap.horas);
+  R.capBase=(num(cap.dias)-num(cap.festivos)-num(cap.vacaciones))*num(cap.turnos)*(num(cap.horas)-num(cap.comida));
+  R.capPractica=Math.max(0, R.capBase*(1-num(cap.ausentismo))-num(cap.mantenimiento)-num(cap.setups)-num(cap.paros));
+  R.horasUsadas = (cap.horasUsadas==null||cap.horasUsadas==="")?null:num(cap.horasUsadas)*f("utilizacion");
+  R.ociosa = R.horasUsadas==null?null:(R.capPractica-R.horasUsadas);
+  R.utilPct = (R.horasUsadas==null||R.capPractica<=0)?null:R.horasUsadas/R.capPractica;
+  // Mano de obra
+  const p=S.moParams;
+  R.provAgui=num(p.aguinaldoDias)/365; R.provVac=(num(p.vacDias)*num(p.primaVac))/365;
+  R.cargaTotal=num(p.isn)+num(p.infonavit)+num(p.imss)+R.provAgui+R.provVac+num(p.otros);
+  R.factorEmpresa=1+R.cargaTotal; R.factorNomina=f("nomina");
+  R.emp=S.empleados.map(e=>{
+    const bruto=(e.period==="Semanal"?num(e.sueldo)*num(p.semanas):num(e.sueldo))*num(e.n);
+    const costo=(bruto*R.factorEmpresa+num(e.uniformes)+num(e.capacitacion))*R.factorNomina;
+    const horas=R.capPractica*(1-num(e.ausent))*num(e.n);
+    return {...e,bruto,costo,horas,tarifa:horas>0?costo/horas:null};
+  });
+  R.moDirecta=R.emp.filter(e=>e.tipo==="Directa").reduce((a,e)=>a+e.costo,0);
+  R.moAdmin=R.emp.filter(e=>e.tipo==="Administrativa").reduce((a,e)=>a+e.costo,0);
+  R.moComercial=R.emp.filter(e=>e.tipo==="Comercial").reduce((a,e)=>a+e.costo,0);
+  // Maquinaria
+  R.maq=S.maquinaria.map(m=>{
+    const dep=(num(m.vida)>0)?(num(m.adquisicion)-num(m.residual))/(num(m.vida)*12):0;
+    const costo=dep+(num(m.mantenimiento)+num(m.refacciones))*f("mantenimiento")+num(m.seguro);
+    const tarifa=R.capPractica>0?costo/R.capPractica:null;
+    return {...m,dep,costo,tarifa};
+  });
+  R.maqTotal=R.maq.reduce((a,m)=>a+m.costo,0);
+  // Indirectos por clasificación
+  const byClass=cl=>S.indirectos.filter(i=>i.cl===cl).reduce((a,i)=>a+num(i.m),0);
+  R.indVar=byClass("Indirecto variable")*f("consumibles"); R.indFijo=byClass("Indirecto fijo");
+  R.indFabril=R.indVar+R.indFijo;
+  R.indAdmin=byClass("Administrativo"); R.indComercial=byClass("Comercial");
+  R.indLog=byClass("Logístico")*f("flete"); R.indFin=byClass("Financiero"); R.indDir=byClass("Directo");
+  // Energía
+  const en=S.energia;
+  R.consumo=en.cargas.reduce((a,c)=>a+num(c.kw)*num(c.h),0);
+  R.enConsumo=R.consumo*num(en.precio); R.enDemanda=0; R.enFijo=num(en.cargoFijo);
+  R.enEstimada=R.enConsumo+R.enFijo;
+  const recibo=(en.reciboReal==null||en.reciboReal==="")?null:num(en.reciboReal);
+  R.energiaSubtotal=(recibo!=null?recibo:R.enEstimada)*f("energia");
+  // Pool y tasa
+  R.pool=R.energiaSubtotal+R.moDirecta+R.maqTotal+R.indFabril;
+  R.tasaPlanta=R.capPractica>0?R.pool/R.capPractica:null;
+  R.ociosaCosto=(R.ociosa!=null&&R.tasaPlanta!=null)?R.ociosa*R.tasaPlanta:null;
+  // Centros de costo
+  R.indRate=R.capPractica>0?(R.energiaSubtotal+R.indFabril)/R.capPractica:0;
+  R.centros=CENTROS.map(c=>{
+    const dirEmp=R.emp.filter(e=>e.centro===c&&e.tipo==="Directa");
+    const moCost=dirEmp.reduce((a,e)=>a+e.costo,0), moHrs=dirEmp.reduce((a,e)=>a+e.horas,0);
+    const moRate=moHrs>0?moCost/moHrs:0;
+    const maqRows=R.maq.filter(m=>m.centro===c);
+    const maqCost=maqRows.reduce((a,m)=>a+m.costo,0), maqCap=maqRows.length*R.capPractica;
+    const maqRate=maqCap>0?maqCost/maqCap:0;
+    return {c,moRate,maqRate,indRate:R.indRate,total:moRate+maqRate+R.indRate};
+  });
+  const centro=c=>R.centros.find(x=>x.c===c)||{moRate:0,maqRate:0,indRate:R.indRate,total:R.indRate};
+  // Financiero
+  const fin=S.financiero;
+  R.diasNetos=Math.max(0,num(fin.diasInv)+num(fin.diasCliente)-num(fin.diasProveedor));
+  R.finTiempo=fin.activar?num(fin.tasaAnual)*R.diasNetos/365:0;
+  R.finTotal=(fin.activar?R.finTiempo+num(fin.comision)+num(fin.difCambiario)+num(fin.reservaFX):0)*f("financiero");
+  // Ruta por operación
+  R.rutaCalc=S.ruta.map(r=>{
+    const ct=centro(r.ce);
+    const ok = isNum(r.prep)&&isNum(r.minMO)&&isNum(r.minMaq)&&isNum(r.lote)&&num(r.lote)>0;
+    if(!ok) return {...r,prepU:null,moU:null,maqU:null,indU:null,totU:null,estado:(r.ins?"PENDIENTE":"")};
+    const rtb=num(r.retrab)*f("retrabajo");
+    const mrm=Math.min(0.95,num(r.merma)*f("rechazo"));
+    const up=(1+rtb)/(1-mrm);
+    const tcf=f("tiempoCiclo"), tpf=f("tiempoPrep");
+    const prepU=(num(r.prep)*tpf/num(r.lote))*(ct.moRate+ct.maqRate+ct.indRate)/60;
+    const moU=num(r.minMO)*tcf*num(r.nop)*ct.moRate/60*up;
+    const maqU=num(r.minMaq)*tcf*ct.maqRate/60*up;
+    const indU=(num(r.minMO)*tcf*num(r.nop)+num(r.minMaq)*tcf)/60*ct.indRate*up;
+    return {...r,prepU,moU,maqU,indU,totU:prepU+moU+maqU+indU,estado:"OK"};
+  });
+  const agg=id=>{
+    const rows=R.rutaCalc.filter(r=>r.ins===id&&r.estado==="OK");
+    return {
+      mo:rows.reduce((a,r)=>a+r.prepU+r.moU,0),
+      maq:rows.reduce((a,r)=>a+r.maqU,0),
+      ind:rows.reduce((a,r)=>a+r.indU,0),
+      nrows:rows.length
+    };
+  };
+  // Porcentajes de asignación (sobre conversión)
+  R.pctAdmin=R.pool>0?(R.indAdmin+R.moAdmin)/R.pool:0;
+  R.pctComercial=R.pool>0?(R.indComercial+R.moComercial)/R.pool:0;
+  R.pctLog=R.pool>0?R.indLog/R.pool:0;
+  // Costeo integral
+  R.integral=S.inserts.map(ins=>{
+    const pi=S.perInsert[ins.id]||{};
+    const mermaMat=num(pi.mermaMat)*f("merma");
+    const garantia=num(pi.garantia)*f("garantias");
+    const margenObj=(pi.margenObj!=null&&pi.margenObj!=="")?num(pi.margenObj):(num(S.control.margenObj)+f("deltaMargen"));
+    const a=agg(ins.id);
+    const dz=disenoCalc(ins);
+    const q25base=(dz&&dz.totalUSD>0)?dz.totalUSD:num(ins.q25);
+    const materialUSD=q25base*f("materiales")/(f("rendimiento")||1);
+    const materialMXN=materialUSD*(1+mermaMat)*R.tc;
+    const conversion=a.mo+a.maq+a.ind;
+    const costoManuf=materialMXN+conversion;
+    const admin=conversion*R.pctAdmin, comercial=conversion*R.pctComercial, logistica=conversion*R.pctLog;
+    const base=costoManuf+admin+comercial+logistica;
+    const financiamiento=base*R.finTotal, garantiaMXN=base*garantia;
+    const costoIntegral=base+financiamiento+garantiaMXN;
+    const complete = materialUSD>0 && conversion>0;
+    const precioSug = (complete && (1-margenObj)>0)?costoIntegral/(1-margenObj):null;
+    const precioClUSD=num(ins.q26)*f("precioVenta");
+    const precioClMXN=precioClUSD*R.tc;
+    const utilidad = complete?precioClMXN-costoIntegral:null;
+    const margenReal = (complete&&precioClMXN>0)?utilidad/precioClMXN:null;
+    const markup = (complete&&costoIntegral>0)?utilidad/costoIntegral:null;
+    let luz="g",estado="COSTEO INCOMPLETO";
+    if(complete){
+      if(margenReal<0){luz="r";estado="Rojo · margen negativo";}
+      else if(margenReal<margenObj){luz="a";estado="Amarillo · bajo objetivo";}
+      else {luz="v";estado="Verde · cumple objetivo";}
+    }
+    const vol=num((S.perInsert[ins.id]||{}).volumen)*f("volumen");
+    const contribUnit=precioClMXN-materialMXN;
+    return {ins,mermaMat,materialUSD,materialMXN,mo:a.mo,maq:a.maq,ind:a.ind,conversion,costoManuf,
+      admin,comercial,logistica,financiamiento,garantiaMXN,costoIntegral,margenObj,precioSug,
+      precioClUSD,precioClMXN,utilidad,margenReal,markup,complete,luz,estado,nrows:a.nrows,
+      vol,contribUnit,contribMes:contribUnit*vol,ingresoMes:precioClMXN*vol,
+      costoMes:complete?costoIntegral*vol:null,utilMes:complete?utilidad*vol:null,
+      tieneDiseno:!!(dz&&dz.piezas.length),disenoUSD:dz?dz.totalUSD:null};
+  });
+  // Agregados mensuales (requieren volumen capturado)
+  R.anyVol=R.integral.some(i=>i.vol>0);
+  const cv=R.integral.filter(i=>i.complete&&i.vol>0);
+  R.ingresoMesComp=cv.reduce((a,i)=>a+i.ingresoMes,0);
+  R.costoMesComp=cv.reduce((a,i)=>a+i.costoMes,0);
+  R.utilMesComp=cv.reduce((a,i)=>a+i.utilMes,0);
+  R.margenPond=R.ingresoMesComp>0?R.utilMesComp/R.ingresoMesComp:null;
+  R.ingresoMesTot=R.integral.reduce((a,i)=>a+i.ingresoMes,0);
+  R.contribMesTot=R.integral.reduce((a,i)=>a+i.contribMes,0);
+  R.readyCount=R.integral.filter(i=>i.complete).length;
+  // Validación
+  const inc=R.integral.filter(i=>!i.complete).length;
+  const sinRuta=R.integral.filter(i=>i.conversion===0).length;
+  const bajoObj=R.integral.filter(i=>i.complete&&i.margenReal<i.margenObj).length;
+  const pend=(S.capacidad.horasUsadas==null?1:0)+(S.energia.reciboReal==null?1:0);
+  R.valid=[
+    {k:"Insertos sin ruta / sin tiempos",v:sinRuta,rev:sinRuta>0},
+    {k:"Insertos con costeo INCOMPLETO",v:inc,rev:inc>0},
+    {k:"Insertos con margen < objetivo",v:bajoObj,rev:bajoObj>0},
+    {k:"Costos mensuales clave PENDIENTES",v:pend,rev:pend>0},
+    {k:"Centros sin capacidad práctica",v:(R.capPractica>0?0:CENTROS.length),rev:R.capPractica<=0},
+    {k:"Diferencia pool vs componentes",v:0,rev:false},
+    {k:"Errores de cálculo",v:0,rev:false}
+  ];
+  R.incompletos=inc; R.sinRuta=sinRuta; R.bajoObj=bajoObj; R.pend=pend;
+  return R;
+}
+function isNum(x){return x!==null&&x!==""&&isFinite(parseFloat(x));}
+function estadoCorto(s){return s==="COSTEO INCOMPLETO"?"Incompleto":s;}
+
+/* ===================== FORMATO ===================== */
+const fMXN=x=>x==null?"—":"$"+(x).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fMXN0=x=>x==null?"—":"$"+(x).toLocaleString("es-MX",{maximumFractionDigits:0});
+const fUSD=x=>x==null?"—":"US$"+(x).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fUSD4=x=>x==null?"—":"US$"+(x).toLocaleString("es-MX",{minimumFractionDigits:4,maximumFractionDigits:4});
+const fPct=x=>x==null?"—":(x*100).toLocaleString("es-MX",{minimumFractionDigits:1,maximumFractionDigits:1})+"%";
+const fN=(x,d=1)=>x==null?"—":(x).toLocaleString("es-MX",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fRate=x=>x==null?'<span class="val-pend">PENDIENTE</span>':"$"+(x).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2})+"<span class='unit'>/h</span>";
+
+/* ===================== BINDING DE INPUTS ===================== */
+function setPath(path,val){
+  const parts=path.split(".");let o=S;
+  for(let i=0;i<parts.length-1;i++){let k=parts[i];if(/^\d+$/.test(k))k=+k;o=o[k];}
+  let last=parts[parts.length-1]; if(/^\d+$/.test(last))last=+last;
+  o[last]=val;
+}
+function inp(path,opts={}){
+  const {type="num",cls="",pct=false,ph="",width=""}=opts;
+  const parts=path.split(".");let o=S;let ok=true;
+  for(const pp of parts){let k=/^\d+$/.test(pp)?+pp:pp; if(o==null){ok=false;break;} o=o[k];}
+  let v=ok?o:"";
+  let disp = v;
+  if(pct && v!=null && v!=="") disp=(+v*100);
+  if(v==null) disp="";
+  const isPend = (v==null||v==="");
+  const cl="f "+cls+(width?" "+width:"")+(isPend&&ph?" pend":"");
+  const attr=`data-path="${path}" data-type="${type}" data-pct="${pct?1:0}"`;
+  if(type==="text") return `<input class="${cl}" ${attr} value="${escapeHtml(disp)}" placeholder="${ph}">`;
+  return `<input class="${cl}" ${attr} type="number" step="any" value="${disp===""?"":disp}" placeholder="${ph}">`;
+}
+function sel(path,options,cls=""){
+  const parts=path.split(".");let o=S;for(const pp of parts){let k=/^\d+$/.test(pp)?+pp:pp;o=o[k];}
+  return `<select class="f ${cls}" data-path="${path}" data-type="text">`+
+    options.map(op=>`<option ${op===o?"selected":""}>${op}</option>`).join("")+`</select>`;
+}
+function getPath(path){let o=S;for(const pp of path.split(".")){let k=/^\d+$/.test(pp)?+pp:pp;if(o==null)return undefined;o=o[k];}return o;}
+function selRaw(path,options,current){
+  return `<select class="f" data-path="${path}" data-type="text">`+
+    options.map(o=>`<option ${String(o)===String(current)?"selected":""}>${escapeHtml(String(o))}</option>`).join("")+`</select>`;
+}
+function ovInput(path,phval){
+  const cur=getPath(path); const disp=(cur==null||cur==="")?"":cur;
+  return `<input class="f" type="number" step="any" data-path="${path}" data-type="num" data-pct="0" value="${disp}" placeholder="${phval}">`;
+}
+function gcd(a,b){a=Math.abs(a);b=Math.abs(b);while(b){[a,b]=[b,a%b];}return a||1;}
+function toFrac(x){
+  if(x==null||x==="") return "";
+  const n=+x; if(!isFinite(n)) return "";
+  const neg=n<0, v=Math.abs(n), whole=Math.floor(v+1e-9), frac=v-whole, denom=16;
+  let numer=Math.round(frac*denom);
+  if(Math.abs(frac*denom-numer)>0.02) return (neg?"-":"")+(+v.toFixed(4));
+  if(numer===0) return (neg?"-":"")+whole;
+  if(numer===denom) return (neg?"-":"")+(whole+1);
+  const g=gcd(numer,denom), d=denom/g; numer/=g;
+  return (neg?"-":"")+(whole>0?whole+" ":"")+numer+"/"+d;
+}
+function parseFrac(s){
+  if(s==null) return null;
+  s=String(s).trim().replace(/[”"'′″]/g,'').trim();
+  if(s==="") return null;
+  let m;
+  if(m=s.match(/^(-?\d+)\s+(\d+)\s*\/\s*(\d+)$/)){ const w=+m[1],n=+m[2],d=+m[3]; if(!d)return null; return (w<0?-1:1)*(Math.abs(w)+n/d); }
+  if(m=s.match(/^(-?\d+)\s*\/\s*(\d+)$/)){ const n=+m[1],d=+m[2]; if(!d)return null; return n/d; }
+  const v=parseFloat(s.replace(',','.')); return isFinite(v)?v:null;
+}
+function fracInput(path,ph){
+  const cur=getPath(path); const disp=(cur==null||cur==="")?"":toFrac(cur);
+  return `<input class="f" type="text" inputmode="text" data-frac="${path}" value="${escapeHtml(disp)}" placeholder="${escapeHtml(ph||'')}">`;
+}
+function centroSel(path){
+  const cur=getPath(path); const c=(cur==null||cur==="")?"":String(cur);
+  const opts=(c&&!CENTROS.includes(c))?[c].concat(CENTROS):CENTROS;
+  return selRaw(path,opts,c||CENTROS[0]);
+}
+function procSel(path){
+  const cur=getPath(path); const c=(cur==null||cur==="")?"":String(cur);
+  const opts=(c&&!PROCESOS.includes(c))?[c].concat(PROCESOS):PROCESOS;
+  return selRaw(path,opts,c||PROCESOS[0]);
+}
+function stdRutaOps(id){
+  return [{ins:id,op:10,proc:CENTRO_PROD,ce:CENTRO_PROD,prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0}];
+}
+function migrateCentros(){
+  const NEW=CENTRO_PROD;
+  const OLD=["Corte","Pegado / Ensamble","Corte y Pegado / Ensamble"];
+  const fix=v=>OLD.includes(v)?NEW:v;
+  (S.empleados||[]).forEach(e=>{e.centro=fix(e.centro);});
+  (S.indirectos||[]).forEach(i=>{i.ce=fix(i.ce);});
+  (S.maquinaria||[]).forEach(m=>{m.centro=fix(m.centro);});
+  (S.ruta||[]).forEach(r=>{ r.ce=fix(r.ce); if(OLD.includes(r.proc)) r.proc=NEW; });
+  // Una sola operación de producción (Corte/Pegado/Ensamble) por inserto
+  const seen={};
+  S.ruta=(S.ruta||[]).filter(r=>{
+    if(r.proc!==NEW) return true;
+    const k=String(r.ins); if(seen[k]) return false; seen[k]=true; return true;
+  });
+}
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||!el.dataset.path) return;
+  let val;
+  if(el.dataset.type==="text"){ val=el.value; }
+  else{
+    if(el.value===""){ val=null; }
+    else{ val=parseFloat(el.value); if(el.dataset.pct==="1") val=val/100; }
+  }
+  setPath(el.dataset.path,val);
+  save(); renderKPIs(); renderChain(); renderSection(current);
+});
+document.addEventListener("input",e=>{ if(e.target.dataset&&e.target.dataset.path) touched(); });
+
+/* ===================== SECCIONES ===================== */
+const SECTIONS=[
+  {id:"dashboard",ix:"01",name:"Panel ejecutivo"},
+  {id:"presupuesto",ix:"02",name:"Presupuesto y equilibrio"},
+  {id:"resumen",ix:"03",name:"Resumen"},
+  {id:"control",ix:"04",name:"Control y escenarios"},
+  {id:"capacidad",ix:"05",name:"Capacidad"},
+  {id:"mano",ix:"06",name:"Mano de obra"},
+  {id:"indirectos",ix:"07",name:"Indirectos"},
+  {id:"energia",ix:"08",name:"Energía y pool"},
+  {id:"centros",ix:"09",name:"Centros de costo"},
+  {id:"ruta",ix:"10",name:"Ruta de proceso"},
+  {id:"financiero",ix:"11",name:"Costo financiero"},
+  {id:"integral",ix:"12",name:"Costeo integral"},
+  {id:"placas",ix:"13",name:"Costeo de placas"},
+  {id:"diagrama",ix:"14",name:"Diagrama de corte"},
+  {id:"validacion",ix:"15",name:"Validación"}
+];
+let current="dashboard";
+
+function renderNav(){
+  document.getElementById("navlist").innerHTML=SECTIONS.map(s=>
+    `<li><button class="navbtn ${s.id===current?'active':''}" onclick="app.go('${s.id}')">
+      <span class="ix mono">${s.ix}</span>${s.name}</button></li>`).join("");
+}
+function renderKPIs(){
+  const R=compute();
+  const estadoTxt = R.incompletos>0?`${R.incompletos} incompleto(s)`:(R.bajoObj>0?`${R.bajoObj} bajo objetivo`:"Todos OK");
+  const estadoLuz = R.incompletos>0?"g":(R.bajoObj>0?"a":"v");
+  document.getElementById("kpis").innerHTML=`
+    ${kpi("Pool de manufactura",fMXN0(R.pool),"$/mes")}
+    ${kpi("Tasa de planta",R.tasaPlanta==null?"—":fMXN(R.tasaPlanta),"$/h")}
+    ${kpi("Capacidad práctica",fN(R.capPractica,0),"h/mes")}
+    ${kpi("TC efectivo",fN(R.tc,4),"MXN/USD")}
+    ${kpi("Escenario",S.control.escenario,"")}
+    <div class="kpi state"><div class="lab">Estado del costeo</div>
+      <div class="val"><span class="lz ${estadoLuz}"><span class="b"></span>${estadoTxt}</span></div></div>`;
+}
+function kpi(lab,val,unit){return `<div class="kpi"><div class="lab">${lab}</div>
+  <div class="val mono">${val} ${unit?`<small>${unit}</small>`:""}</div></div>`;}
+function renderChain(){
+  const R=compute();
+  const chips=[
+    ["Escenario",S.control.escenario],
+    ["TC efectivo",fN(R.tc,4)],
+    ["Capacidad",fN(R.capPractica,0)+" h"],
+    ["Pool",fMXN0(R.pool)],
+    ["Tasa planta",R.tasaPlanta==null?"—":fMXN(R.tasaPlanta)+"/h"],
+    ["Centros",R.centros.length+" tarifas"],
+    ["Ruta→Integral",R.sinRuta+" sin ruta"],
+    ["Precio",R.incompletos>0?"incompleto":"listo"]
+  ];
+  document.getElementById("chain").innerHTML=chips.map((c,i)=>
+    `<span class="c">${c[0]}: <b>${c[1]}</b></span>`+(i<chips.length-1?`<span class="ar">→</span>`:"")).join("");
+}
+function head(name,src,lead){
+  return `<div class="sechead"><h2>${name}</h2><span class="src">${src}</span></div>
+    ${lead?`<p class="lead">${lead}</p>`:""}`;
+}
+
+/* ---------- RESUMEN ---------- */
+function secResumen(R){
+  let rows=R.integral.map(i=>`<tr>
+    <td class="l mono">${i.ins.id}</td>
+    <td class="mono val-link">${fUSD(i.materialUSD)}</td>
+    <td class="mono val-calc">${fMXN(i.materialMXN)}</td>
+    <td class="mono val-calc">${i.conversion?fMXN(i.conversion):'<span class="val-pend">s/ruta</span>'}</td>
+    <td class="mono val-calc">${fMXN(i.costoIntegral)}</td>
+    <td class="mono val-calc">${i.precioSug==null?'—':fMXN(i.precioSug)}</td>
+    <td class="mono val-link">${fMXN(i.precioClMXN)}</td>
+    <td class="mono val-calc">${i.utilidad==null?'—':fMXN(i.utilidad)}</td>
+    <td class="mono">${i.margenReal==null?'—':fPct(i.margenReal)}</td>
+    <td class="mono">${i.markup==null?'—':fPct(i.markup)}</td>
+    <td class="l"><span class="lz ${i.luz}"><span class="b"></span>${i.estado}</span></td></tr>`).join("");
+  return head("Resumen del costeo","COSTEO_INTEGRAL · CONTROL · VALIDACION",
+    "Vista de todos los insertos con su costo integral, precio y semáforo. Cambia cualquier dato en las demás secciones y estos indicadores se recalculan en cadena. Sin tiempos de ruta, el inserto queda como <b>costeo incompleto</b> y no genera precio válido.")
+    +`<div class="scroll"><table><thead><tr>
+      <th class="l">Inserto</th><th>Material (USD)</th><th>Material (MXN)</th><th>Conversión</th>
+      <th>Costo integral</th><th>Precio sugerido</th><th>Precio cliente</th><th>Utilidad/pza</th>
+      <th>Margen real</th><th>Markup</th><th class="l">Semáforo</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--green)"></span><b>Verde</b> cumple objetivo</span>
+      <span><span class="sw" style="background:var(--amber)"></span><b>Amarillo</b> positivo, bajo objetivo</span>
+      <span><span class="sw" style="background:var(--red)"></span><b>Rojo</b> margen negativo</span>
+      <span><span class="sw" style="background:var(--gray)"></span><b>Gris</b> costeo incompleto</span>
+    </div>
+    <div class="grid2" style="margin-top:16px">
+      ${cardMini("Cómo se conecta","Escenario y TC → material en MXN. Capacidad + nómina + maquinaria + indirectos + energía → <b>pool</b> → <b>tasa de planta</b> → tarifas por <b>centro</b>. Los tiempos de <b>ruta</b> por inserto consumen esas tarifas → conversión → costo integral → precio y margen. Edita un dato en cualquier hoja y todo se actualiza aquí.")}
+      ${cardValidResumen(R)}
+    </div>`;
+}
+function cardMini(t,b){return `<div class="card"><h3>${t}</h3><div class="pad"><div class="note" style="border:0;background:none;padding:0">${b}</div></div></div>`;}
+function cardValidResumen(R){
+  const rows=R.valid.map(v=>`<tr><td class="l">${v.k}</td><td class="mono val-calc">${v.v}</td>
+    <td class="l"><span class="pill ${v.rev?'rev':'ok'}">${v.rev?'REVISAR':'OK'}</span></td></tr>`).join("");
+  return `<div class="card"><h3>Validación rápida</h3><div class="body"><table>${rows}</table></div></div>`;
+}
+
+/* ---------- CONTROL ---------- */
+function secControl(R){
+  const levers=[
+    ["tc","Tipo de cambio (compras USD)","x"],["materiales","Precio del foam","x"],
+    ["rendimiento","Rendimiento del corte","x"],["merma","Merma de material","x"],
+    ["volumen","Volumen de producción/venta","x"],["utilizacion","Utilización de capacidad","x"],
+    ["energia","Energía eléctrica","x"],["nomina","Nómina y carga patronal","x"],
+    ["flete","Flete (entrada/cliente)","x"],["tiempoCiclo","Tiempo de ciclo por pieza","x"],
+    ["tiempoPrep","Tiempo de preparación","x"],["retrabajo","Retrabajo","x"],
+    ["rechazo","Rechazo definitivo","x"],["mantenimiento","Mantenimiento y refacciones","x"],
+    ["consumibles","Consumibles y adhesivos","x"],["garantias","Garantías/devoluciones","x"],
+    ["precioVenta","Precio de venta","x"],["financiero","Costo financiero","x"],
+    ["deltaMargen","Delta de margen objetivo","p.p."]
+  ];
+  const escenarios=["Base","Conservador","Estrés"];
+  let lrows=levers.map(([k,lab,u])=>`<tr><td class="l">${lab}</td>
+    ${escenarios.map(e=>{
+      const isBase=e==="Base";const pct=(k==="deltaMargen");
+      return `<td>${isBase&&k!=="deltaMargen"?'<span class="val-calc mono">1.00</span>':
+        inp(`escenarios.${k}.${e}`,{pct:pct,cls:"",width:""})}${pct?'<span class="unit">p.p.</span>':''}</td>`;
+    }).join("")}
+    <td class="mono val-link">${k==="deltaMargen"?fN(f(k)*(k==="deltaMargen"?100:1),k==="deltaMargen"?1:2)+(k==="deltaMargen"?' p.p.':''):fN(f(k),2)}</td></tr>`).join("");
+  return head("Control y escenarios","CONTROL · ESCENARIOS",
+    "El selector de escenario alimenta todo el modelo. El TC efectivo = TC base × factor del escenario. Base está fijo en 1.00; captura los factores de estrés en azul.")
+  +`<div class="grid2">
+    <div class="card"><h3>Parámetros globales</h3><div class="pad">
+      <table>
+        <tr><td class="l">Escenario activo</td><td class="l">${sel("control.escenario",escenarios)}</td></tr>
+        <tr><td class="l">Tipo de cambio base <span class="unit">MXN/USD</span></td><td>${inp("control.tcBase")}</td></tr>
+        <tr><td class="l">Fecha de actualización del TC</td><td>${inp("control.tcFecha",{type:"text",cls:"txt",ph:"dd/mm/aaaa"})}</td></tr>
+        <tr><td class="l">TC efectivo <span class="hint">(base × escenario)</span></td><td class="mono val-calc">${fN(R.tc,4)}</td></tr>
+        <tr><td class="l">Margen objetivo por defecto</td><td>${inp("control.margenObj",{pct:true})}<span class="unit">%</span></td></tr>
+        <tr><td class="l">Vigencia de precios <span class="unit">meses</span></td><td>${inp("control.vigenciaMeses")}</td></tr>
+      </table>
+      <div class="note" style="margin-top:12px">
+        <b>Tipo de cambio oficial.</b> Esta vista no consulta Banxico/DOF en vivo (el entorno publicado no permite llamadas de red externas), pero mantén el TC al día desde la fuente oficial:
+        <div style="margin:8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="rowbtn" style="margin:0" onclick="app.setTcOficial(${TC_OFICIAL})">Aplicar FIX ${fN(TC_OFICIAL,4)} (${TC_OFICIAL_FECHA})</button>
+          <a class="btn" style="display:inline-block" href="https://www.banxico.org.mx/portal-mercado-cambiario/" target="_blank" rel="noopener">Banxico FIX ↗</a>
+          <a class="btn" style="display:inline-block" href="https://dof.gob.mx/indicadores.php" target="_blank" rel="noopener">DOF ↗</a>
+        </div>
+        Banxico determina el FIX cada día hábil (~12:30 h) y el DOF lo publica al día hábil siguiente. Para obligaciones y facturación en dólares, el oficial es el del DOF (el FIX del día hábil anterior). El valor del botón es el último confirmado; verifica el del día en los enlaces.
+      </div>
+      <div class="note" style="margin-top:8px">Margen sobre venta = utilidad ÷ precio. Markup = utilidad ÷ costo. Precio con margen objetivo = costo integral ÷ (1 − margen).</div>
+    </div></div>
+    <div class="card"><h3>Palancas por escenario</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
+      <table><thead><tr><th class="l">Palanca</th><th>Base</th><th>Conservador</th><th>Estrés</th><th>Activo</th></tr></thead>
+      <tbody>${lrows}</tbody></table></div>
+      <div style="padding:8px 12px"><button class="rowbtn" onclick="app.aplicarEscenarios()">Cargar valores sugeridos North Foam</button>
+      <span class="hint">19 palancas conectadas: TC, foam, rendimiento, merma, volumen, utilización, energía, nómina, flete, tiempo de ciclo y preparación, retrabajo, rechazo, mantenimiento, consumibles, garantías, precio de venta y costo financiero. Base = todo neutral; el selector estresa el modelo completo.</span></div></div></div>
+  </div>`;
+}
+
+/* ---------- CAPACIDAD ---------- */
+function secCapacidad(R){
+  const rows=[
+    ["dias","Días laborables por mes","días"],["turnos","Turnos por día","turnos"],
+    ["horas","Horas ordinarias por turno","h"],["comida","Horas de comida no productivas / turno","h"],
+    ["festivos","Días festivos por mes","días"],["vacaciones","Vacaciones (días/mes, prorrateo)","días"],
+    ["ausentismo","Ausentismo","%"],["mantenimiento","Mantenimiento programado","h/mes"],
+    ["setups","Preparaciones / setups","h/mes"],["paros","Paros no programados","h/mes"]
+  ];
+  const irows=rows.map(([k,lab,u])=>`<tr><td class="l">${lab}</td>
+    <td>${inp("capacidad."+k,{pct:u==="%"})}<span class="unit">${u}</span></td></tr>`).join("");
+  return head("Capacidad práctica","CAPACIDAD",
+    "Sustituye el viejo factor fijo de 85%. La capacidad práctica es el denominador de todas las tarifas. La capacidad ociosa se muestra aparte y no se reparte entre productos.")
+  +`<div class="grid2">
+    <div class="card"><h3>Tiempo disponible</h3><div class="pad"><table>${irows}</table></div></div>
+    <div class="card"><h3>Capacidad resultante</h3><div class="pad"><table>
+      <tr><td class="l">Capacidad teórica</td><td class="mono val-calc">${fN(R.capTeorica,0)}<span class="unit">h/mes</span></td></tr>
+      <tr><td class="l">Horas productivas base</td><td class="mono val-calc">${fN(R.capBase,0)}<span class="unit">h/mes</span></td></tr>
+      <tr class="total"><td class="l">Capacidad práctica</td><td class="mono">${fN(R.capPractica,0)}<span class="unit">h/mes</span></td></tr>
+      <tr><td class="l">Horas utilizadas <span class="hint">(captura)</span></td><td>${inp("capacidad.horasUsadas",{ph:"PENDIENTE"})}</td></tr>
+      <tr><td class="l">Capacidad ociosa</td><td class="mono val-calc">${R.ociosa==null?'<span class="val-pend">PENDIENTE</span>':fN(R.ociosa,0)+' h'}</td></tr>
+      <tr><td class="l">% de utilización</td><td class="mono val-calc">${R.utilPct==null?'<span class="val-pend">PENDIENTE</span>':fPct(R.utilPct)}</td></tr>
+    </table></div></div>
+  </div>`;
+}
+
+/* ---------- MANO DE OBRA ---------- */
+function secMano(R){
+  const p=[
+    ["isn","ISN Baja California",1],["infonavit","INFONAVIT",1],["imss","IMSS + RCV patronal (aprox.)",1],
+    ["aguinaldoDias","Aguinaldo (días/año)",0],["vacDias","Vacaciones (días/año)",0],
+    ["primaVac","Prima vacacional",1],["otros","Otros costos laborales",1],["semanas","Semanas por mes",0]
+  ];
+  const prows=p.map(([k,lab,isPct])=>`<tr><td class="l">${lab}${k==="imss"?' <span class="tag">confirmar</span>':''}</td>
+    <td>${inp("moParams."+k,{pct:isPct===1})}${isPct?'<span class="unit">%</span>':''}</td></tr>`).join("");
+  const erows=R.emp.map((e,i)=>`<tr>
+    <td class="l">${inp(`empleados.${i}.puesto`,{type:"text",cls:"txt wide"})}</td>
+    <td class="l">${sel(`empleados.${i}.tipo`,TIPOS)}</td>
+    <td class="l">${centroSel(`empleados.${i}.centro`)}</td>
+    <td class="l">${sel(`empleados.${i}.period`,PERIOD)}</td>
+    <td>${inp(`empleados.${i}.sueldo`,{ph:"—"})}</td>
+    <td>${inp(`empleados.${i}.n`,{width:""})}</td>
+    <td class="mono val-calc">${fMXN0(e.bruto)}</td>
+    <td class="mono val-calc">${fMXN0(e.costo)}</td>
+    <td class="mono val-calc">${e.tarifa==null?'—':fMXN(e.tarifa)+'/h'}</td>
+    <td><button class="del" onclick="app.delRow('empleados',${i})">✕</button></td></tr>`).join("");
+  return head("Mano de obra","MANO_OBRA",
+    "Sustituye el factor 1.35 por cargas patronales explícitas. El costo-empresa por hora = costo mensual ÷ horas productivas. Los % de ley son supuestos: confírmalos con tu contador.")
+  +`<div class="grid2">
+    <div class="card"><h3>Cargas patronales</h3><div class="pad"><table>${prows}
+      <tr class="sub"><td class="l">Provisión aguinaldo</td><td class="mono">${fPct(R.provAgui)}</td></tr>
+      <tr class="sub"><td class="l">Provisión vacaciones + prima</td><td class="mono">${fPct(R.provVac)}</td></tr>
+      <tr class="total"><td class="l">Carga patronal total</td><td class="mono">${fPct(R.cargaTotal)}</td></tr>
+      <tr class="total"><td class="l">Factor costo-empresa</td><td class="mono">${fN(R.factorEmpresa,3)}</td></tr>
+    </table></div></div>
+    <div class="card"><h3>Roll-ups mensuales</h3><div class="pad"><table>
+      <tr><td class="l">MO directa → pool de manufactura</td><td class="mono val-calc">${fMXN(R.moDirecta)}</td></tr>
+      <tr><td class="l">Labor administrativa → costo integral</td><td class="mono val-calc">${fMXN(R.moAdmin)}</td></tr>
+      <tr><td class="l">Labor comercial → costo integral</td><td class="mono val-calc">${fMXN(R.moComercial)}</td></tr>
+    </table><div class="note" style="margin-top:12px">Factor de nómina del escenario aplicado: <b>${fN(R.factorNomina,2)}</b>.</div></div></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h3>Plantilla y costo empresa</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
+    <table><thead><tr><th class="l">Puesto</th><th class="l">Tipo</th><th class="l">Centro</th><th class="l">Periodicidad</th>
+      <th>Sueldo bruto</th><th>N°</th><th>Bruto mensual</th><th>Costo empresa</th><th>Tarifa $/h</th><th></th></tr></thead>
+    <tbody>${erows}</tbody></table></div>
+    <button class="rowbtn" onclick="app.addEmp()">+ Agregar puesto</button></div></div>`;
+}
+
+/* ---------- MAQUINARIA ---------- */
+function secMaquinaria(R){
+  const rows=R.maq.map((m,i)=>`<tr>
+    <td class="l">${inp(`maquinaria.${i}.equipo`,{type:"text",cls:"txt wide"})}</td>
+    <td class="l">${sel(`maquinaria.${i}.centro`,CENTROS)}</td>
+    <td>${inp(`maquinaria.${i}.adquisicion`,{ph:"PEND"})}</td>
+    <td>${inp(`maquinaria.${i}.vida`,{ph:"años"})}</td>
+    <td>${inp(`maquinaria.${i}.residual`)}</td>
+    <td>${inp(`maquinaria.${i}.mantenimiento`,{ph:"—"})}</td>
+    <td>${inp(`maquinaria.${i}.refacciones`,{ph:"—"})}</td>
+    <td>${inp(`maquinaria.${i}.seguro`,{ph:"—"})}</td>
+    <td class="mono val-calc">${fMXN0(m.dep)}</td>
+    <td class="mono val-calc">${fMXN0(m.costo)}</td>
+    <td class="mono val-calc">${m.tarifa==null?'—':fMXN(m.tarifa)+'/h'}</td>
+    <td><button class="del" onclick="app.delRow('maquinaria',${i})">✕</button></td></tr>`).join("");
+  return head("Maquinaria","MAQUINARIA",
+    "Depreciación mensual = (adquisición − residual) ÷ (vida × 12). El costo de máquina que entra al pool = depreciación + mantenimiento + refacciones + seguro. Captura los valores en amarillo para activar la depreciación.")
+  +`<div class="scroll"><table><thead><tr>
+    <th class="l">Equipo</th><th class="l">Centro</th><th>Adquisición</th><th>Vida (años)</th><th>Residual</th>
+    <th>Mant./mes</th><th>Refacc./mes</th><th>Seguro/mes</th><th>Deprec./mes</th><th>Costo máq./mes</th><th>Tarifa $/h</th><th></th>
+    </tr></thead><tbody>${rows}
+    <tr class="total"><td class="l" colspan="9">Total maquinaria → pool</td><td class="mono">${fMXN(R.maqTotal)}</td><td colspan="2"></td></tr>
+    </tbody></table></div>
+    <button class="rowbtn" onclick="app.addMaq()">+ Agregar equipo</button>`;
+}
+
+/* ---------- INDIRECTOS ---------- */
+function secIndirectos(R){
+  const rows=S.indirectos.map((it,i)=>`<tr>
+    <td class="l">${inp(`indirectos.${i}.c`,{type:"text",cls:"txt wide"})}</td>
+    <td class="l">${sel(`indirectos.${i}.cl`,CLASES)}</td>
+    <td class="l">${centroSel(`indirectos.${i}.ce`)}</td>
+    <td>${inp(`indirectos.${i}.m`,{ph:"—"})}</td>
+    <td><button class="del" onclick="app.delRow('indirectos',${i})">✕</button></td></tr>`).join("");
+  return head("Indirectos y gastos","INDIRECTOS",
+    "La clasificación decide a dónde va cada gasto: los fabriles entran a la tasa de manufactura; administración, comercial, logística y financiero se aplican en el costo integral.")
+  +`<div class="scroll"><table><thead><tr><th class="l">Concepto</th><th class="l">Clasificación</th><th class="l">Centro</th><th>$/mes</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    <button class="rowbtn" onclick="app.addInd()">+ Agregar concepto</button>
+    <div class="grid2" style="margin-top:16px">
+      <div class="card"><h3>Roll-ups por naturaleza</h3><div class="body"><table>
+        <tr><td class="l">Indirecto variable (fabril)</td><td class="mono val-calc">${fMXN(R.indVar)}</td></tr>
+        <tr><td class="l">Indirecto fijo (fabril)</td><td class="mono val-calc">${fMXN(R.indFijo)}</td></tr>
+        <tr class="total"><td class="l">Total indirectos fabriles → pool</td><td class="mono">${fMXN(R.indFabril)}</td></tr>
+        <tr><td class="l">Administrativo → integral</td><td class="mono val-calc">${fMXN(R.indAdmin)}</td></tr>
+        <tr><td class="l">Comercial → integral</td><td class="mono val-calc">${fMXN(R.indComercial)}</td></tr>
+        <tr><td class="l">Logístico → integral</td><td class="mono val-calc">${fMXN(R.indLog)}</td></tr>
+        <tr><td class="l">Financiero</td><td class="mono val-calc">${fMXN(R.indFin)}</td></tr>
+      </table></div></div>
+      <div class="card"><h3>% de asignación (sobre conversión)</h3><div class="body"><table>
+        <tr><td class="l">% Administración</td><td class="mono val-calc">${fPct(R.pctAdmin)}</td></tr>
+        <tr><td class="l">% Comercial</td><td class="mono val-calc">${fPct(R.pctComercial)}</td></tr>
+        <tr><td class="l">% Logística</td><td class="mono val-calc">${fPct(R.pctLog)}</td></tr>
+      </table><div class="note" style="margin-top:10px">Incluyen la labor administrativa y comercial de la hoja de mano de obra, divididas entre el pool de manufactura.</div></div></div>
+    </div>`;
+}
+
+/* ---------- ENERGÍA Y POOL ---------- */
+function secEnergia(R){
+  const loads=S.energia.cargas.map((c,i)=>`<tr>
+    <td class="l">${inp(`energia.cargas.${i}.n`,{type:"text",cls:"txt wide"})}</td>
+    <td>${inp(`energia.cargas.${i}.kw`)}</td>
+    <td>${inp(`energia.cargas.${i}.h`)}</td>
+    <td class="mono val-calc">${fN(num(c.kw)*num(c.h),0)}</td>
+    <td><button class="del" onclick="app.delRow('energia.cargas',${i})">✕</button></td></tr>`).join("");
+  return head("Energía y pool de manufactura","COSTEO_MANUFACTURA",
+    "Tarifa comercial de baja tensión (PDBT): sólo cargo por consumo ($/kWh) + cargo fijo, sin cargo por demanda (eso aplica a media tensión con subestación). La base principal debe ser el recibo real de CFE; la estimación por potencia×horas es sólo validación. El pool reúne energía + MO directa + maquinaria + indirectos fabriles y define la tasa de planta.")
+  +`<div class="grid2">
+    <div class="card"><h3>Parámetros de energía · CFE tarifa comercial baja tensión (PDBT)</h3><div class="pad"><table>
+      <tr><td class="l">Precio de energía (tarifa comercial PDBT)</td><td>${inp("energia.precio")}<span class="unit">$/kWh</span></td></tr>
+      <tr><td class="l">Cargo fijo mensual</td><td>${inp("energia.cargoFijo")}</td></tr>
+      <tr><td class="l">Costo real de recibo CFE <span class="hint">(base principal)</span></td><td>${inp("energia.reciboReal",{ph:"PENDIENTE"})}</td></tr>
+    </table></div></div>
+    <div class="card"><h3>Resumen de energía</h3><div class="pad"><table>
+      <tr><td class="l">Consumo estimado</td><td class="mono val-calc">${fN(R.consumo,0)}<span class="unit">kWh</span></td></tr>
+      <tr><td class="l">Costo energía (consumo)</td><td class="mono val-calc">${fMXN(R.enConsumo)}</td></tr>
+      <tr><td class="l">Cargo fijo mensual</td><td class="mono val-calc">${fMXN(R.enFijo)}</td></tr>
+      <tr><td class="l">Energía estimada</td><td class="mono val-calc">${fMXN(R.enEstimada)}</td></tr>
+      <tr class="total"><td class="l">Subtotal energía (× escenario)</td><td class="mono">${fMXN(R.energiaSubtotal)}</td></tr>
+    </table></div></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h3>Cargas eléctricas (validación)</h3><div class="body">
+    <div class="scroll" style="border:0;box-shadow:none"><table><thead><tr><th class="l">Equipo / carga</th><th>Potencia kW</th><th>Horas/mes</th><th>kWh/mes</th><th></th></tr></thead>
+    <tbody>${loads}</tbody></table></div>
+    <button class="rowbtn" onclick="app.addCarga()">+ Agregar carga</button></div></div>
+  <div class="card" style="margin-top:16px"><h3>Pool de manufactura y tasa de planta</h3><div class="pad"><table>
+    <tr><td class="l">Energía eléctrica</td><td class="mono val-link">${fMXN(R.energiaSubtotal)}</td></tr>
+    <tr><td class="l">Mano de obra directa</td><td class="mono val-link">${fMXN(R.moDirecta)}</td></tr>
+    <tr><td class="l">Maquinaria (deprec. + mantenimiento)</td><td class="mono val-link">${fMXN(R.maqTotal)}</td></tr>
+    <tr><td class="l">Indirectos fabriles</td><td class="mono val-link">${fMXN(R.indFabril)}</td></tr>
+    <tr class="total"><td class="l">Total pool de manufactura</td><td class="mono">${fMXN(R.pool)}</td></tr>
+    <tr><td class="l">Capacidad práctica</td><td class="mono val-link">${fN(R.capPractica,0)} h/mes</td></tr>
+    <tr class="total"><td class="l">Tasa de manufactura (planta)</td><td class="mono">${R.tasaPlanta==null?'—':fMXN(R.tasaPlanta)+' /h'}</td></tr>
+    <tr><td class="l">Costo de capacidad ociosa <span class="hint">(no se reparte)</span></td><td class="mono val-calc">${R.ociosaCosto==null?'<span class="val-pend">PENDIENTE</span>':fMXN(R.ociosaCosto)}</td></tr>
+  </table></div></div>`;
+}
+
+/* ---------- CENTROS ---------- */
+function secCentros(R){
+  const rows=R.centros.map(c=>`<tr>
+    <td class="l">${c.c}</td>
+    <td class="mono val-calc">${c.moRate>0?fMXN(c.moRate):'—'}</td>
+    <td class="mono val-calc">${fMXN(c.indRate)}</td>
+    <td class="mono" style="font-weight:700">${fMXN(c.total)}<span class="unit">/h</span></td></tr>`).join("");
+  return head("Centros de costo","CENTROS_COSTO",
+    "Cada centro tiene su propia tarifa de mano de obra (derivada de la nómina de sus operadores directos) y una tarifa de indirectos de planta. Tarifa total = mano de obra + indirectos. Los tiempos de la ruta consumen estas tarifas.")
+  +`<div class="scroll"><table><thead><tr><th class="l">Centro de costo</th><th>Tarifa MO $/h</th><th>Tarifa indirectos $/h</th><th>Tarifa TOTAL $/h</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---------- RUTA ---------- */
+let rutaFilter="(todos)";
+function secRuta(R){
+  const insOpts=["(todos)"].concat(S.inserts.map(i=>i.id));
+  const shown=R.rutaCalc.map((r,i)=>({r,i})).filter(x=>rutaFilter==="(todos)"||x.r.ins===rutaFilter);
+  const rows=shown.map(({r,i})=>`<tr>
+    <td class="l">${sel(`ruta.${i}.ins`,S.inserts.map(x=>x.id))}</td>
+    <td>${inp(`ruta.${i}.op`)}</td>
+    <td class="l val-calc">${escapeHtml(String(r.proc||CENTRO_PROD))}</td>
+    <td class="l val-calc">${escapeHtml(String(r.ce||CENTRO_PROD))}</td>
+    <td>${inp(`ruta.${i}.prep`,{ph:"PEND"})}</td>
+    <td>${inp(`ruta.${i}.lote`)}</td>
+    <td>${inp(`ruta.${i}.minMO`,{ph:"PEND"})}</td>
+    <td>${inp(`ruta.${i}.minMaq`,{ph:"PEND"})}</td>
+    <td>${inp(`ruta.${i}.nop`)}</td>
+    <td>${inp(`ruta.${i}.retrab`,{pct:true})}</td>
+    <td>${inp(`ruta.${i}.merma`,{pct:true})}</td>
+    <td class="mono val-calc">${r.totU==null?'—':fMXN(r.totU)}</td>
+    <td class="l">${r.estado?`<span class="pill ${r.estado==='OK'?'ok':'rev'}">${r.estado}</span>`:''}</td>
+    <td><button class="del" onclick="app.delRow('ruta',${i})">✕</button></td></tr>`).join("");
+  return head("Ruta de proceso","RUTA_PROCESO",
+    "Captura los tiempos reales por operación. Prep/unidad = min prep ÷ tamaño de lote. MO/unidad = min MO × operadores × tarifa MO ÷ 60. Se ajusta por retrabajo y merma. <b>Sin tiempos, el inserto queda incompleto.</b>")
+  +`<div class="filterbar"><span class="hint">Filtrar por inserto:</span>
+    <select class="f" onchange="app.setRutaFilter(this.value)">${insOpts.map(o=>`<option ${o===rutaFilter?'selected':''}>${o}</option>`).join("")}</select></div>
+    <div class="scroll"><table><thead><tr>
+    <th class="l">Inserto</th><th>Op</th><th class="l">Proceso</th><th class="l">Centro</th><th>Min prep/lote</th><th>Lote</th>
+    <th>Min MO/u</th><th>Min máq/u</th><th>N° op.</th><th>% retrab.</th><th>% merma</th><th>Costo total/u</th><th class="l">Estado</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+    <button class="rowbtn" onclick="app.addRuta()">+ Agregar operación</button>
+    <button class="rowbtn" onclick="app.rutasEstandar()">Aplicar ruta estándar (Corte/Pegado/Ensamble) a todos</button>`;
+}
+
+/* ---------- FINANCIERO ---------- */
+function secFinanciero(R){
+  return head("Costo financiero","COSTO_FINANCIERO",
+    "Costo financiero = base × tasa anual × días financiados ÷ 365, más comisiones y coberturas. Se aplica en el costo integral como % sobre el costo previo.")
+  +`<div class="grid2">
+    <div class="card"><h3>Parámetros</h3><div class="pad"><table>
+      <tr><td class="l">Activar costo financiero</td><td class="l">
+        <select class="f" data-path="financiero.activar" data-type="bool">
+          <option value="true" ${S.financiero.activar?'selected':''}>Sí</option>
+          <option value="false" ${!S.financiero.activar?'selected':''}>No</option>
+        </select></td></tr>
+      <tr><td class="l">Días de inventario</td><td>${inp("financiero.diasInv")}</td></tr>
+      <tr><td class="l">Días de crédito al cliente</td><td>${inp("financiero.diasCliente")}</td></tr>
+      <tr><td class="l">Días de crédito del proveedor</td><td>${inp("financiero.diasProveedor")}</td></tr>
+      <tr><td class="l">Tasa anual de financiamiento</td><td>${inp("financiero.tasaAnual",{pct:true})}<span class="unit">%</span></td></tr>
+      <tr><td class="l">Comisión bancaria (s/venta)</td><td>${inp("financiero.comision",{pct:true})}<span class="unit">%</span></td></tr>
+      <tr><td class="l">Diferencial cambiario</td><td>${inp("financiero.difCambiario",{pct:true})}<span class="unit">%</span></td></tr>
+      <tr><td class="l">Reserva de riesgo cambiario</td><td>${inp("financiero.reservaFX",{pct:true})}<span class="unit">%</span></td></tr>
+    </table></div></div>
+    <div class="card"><h3>Resultado</h3><div class="pad"><table>
+      <tr><td class="l">Días financiados netos</td><td class="mono val-calc">${fN(R.diasNetos,0)}</td></tr>
+      <tr><td class="l">Costo financiero por tiempo</td><td class="mono val-calc">${fPct(R.finTiempo)}</td></tr>
+      <tr class="total"><td class="l">% financiero total (sobre costo)</td><td class="mono">${fPct(R.finTotal)}</td></tr>
+    </table></div></div>
+  </div>`;
+}
+
+/* ---------- INTEGRAL ---------- */
+function secIntegral(R){
+  const rows=R.integral.map((it,i)=>{
+    const id=it.ins.id; const pi=S.perInsert[id]||{};
+    return `<tr>
+      <td class="l">${insIdInput(i,id)}</td>
+      <td>${inpPer(id,"volumen",false)}</td>
+      <td>${it.tieneDiseno?`<span class="val-link mono" title="Calculado en Costeo de placas">${fUSD(it.disenoUSD)}</span>`:inp(`inserts.${i}.q25`)}</td>
+      <td>${inpPer(id,"mermaMat",true)}</td>
+      <td class="mono val-calc">${fMXN(it.materialMXN)}</td>
+      <td class="mono val-calc">${it.mo?fMXN(it.mo):'—'}</td>
+      <td class="mono val-calc">${it.maq?fMXN(it.maq):'—'}</td>
+      <td class="mono val-calc">${it.ind?fMXN(it.ind):'—'}</td>
+      <td class="mono val-calc" style="font-weight:700">${fMXN(it.costoManuf)}</td>
+      <td class="mono val-calc">${fMXN(it.admin)}</td>
+      <td class="mono val-calc">${fMXN(it.comercial)}</td>
+      <td class="mono val-calc">${fMXN(it.logistica)}</td>
+      <td class="mono val-calc">${fMXN(it.financiamiento)}</td>
+      <td class="mono val-calc" style="font-weight:700">${fMXN(it.costoIntegral)}</td>
+      <td>${inpPerMargen(id,it.margenObj)}</td>
+      <td class="mono val-calc" style="font-weight:700">${it.precioSug==null?'<span class="val-pend">INCOMPLETO</span>':fMXN(it.precioSug)}</td>
+      <td>${inp(`inserts.${i}.q26`)}</td>
+      <td class="mono val-link">${fMXN(it.precioClMXN)}</td>
+      <td class="mono val-calc">${it.utilidad==null?'—':fMXN(it.utilidad)}</td>
+      <td class="mono">${it.margenReal==null?'—':fPct(it.margenReal)}</td>
+      <td class="mono">${it.markup==null?'—':fPct(it.markup)}</td>
+      <td class="l"><span class="lz ${it.luz}"><span class="b"></span>${it.estado}</span></td>
+      <td><button class="del" onclick="app.delInsert(${i})" title="Eliminar inserto">✕</button></td></tr>`;
+  }).join("");
+  return head("Costeo integral por inserto","COSTEO_INTEGRAL",
+    "Material y precio cliente se conservan de cada inserto (azul, editable). La conversión viene de la ruta con tarifas por centro. Admin/comercial/logística se aplican sobre la conversión; financiamiento y garantías sobre el costo previo. Margen sobre venta ≠ markup.")
+  +`<div class="filterbar"><span class="hint">${R.integral.length} insertos en la lista · ${R.readyCount} costeados.</span></div>
+    <div class="scroll"><table><thead><tr>
+    <th class="l">Inserto</th><th>Vol. mensual</th><th>Mat. (USD)</th><th>% Merma</th><th>Mat. (MXN)</th><th>MO</th><th>Máquina</th><th>Indirectos</th>
+    <th>Costo manuf.</th><th>Admin</th><th>Comercial</th><th>Logística</th><th>Financ.</th><th>Costo integral</th>
+    <th>Margen obj.</th><th>Precio sugerido</th><th>Precio cli. (USD)</th><th>Precio cli. (MXN)</th>
+    <th>Utilidad/pza</th><th>Margen real</th><th>Markup</th><th class="l">Semáforo</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="margin:8px 0">
+      <button class="rowbtn" onclick="app.addInsert()">+ Agregar inserto</button>
+      <button class="rowbtn" onclick="app.addInserts(10)">+ Agregar 10</button>
+      <button class="rowbtn" onclick="app.addInserts(60)">+ Agregar 60</button>
+    </div>
+    <div class="note" style="margin-top:6px">Captura el <b>número de inserto</b> (azul), su <b>material US$</b> y su <b>precio cliente US$</b> para darlo de alta. El % de merma y el margen objetivo son editables por inserto; si dejas el margen vacío usa el objetivo global (${fPct(num(S.control.margenObj)+f("deltaMargen"))}) del escenario actual. Para encender un inserto captura sus tiempos en <b>Ruta de proceso</b> (su número ya aparece en el menú de esa hoja). Si cambias el número de un inserto, su ruta y volumen se reasignan solos.</div>`;
+}
+function inpPer(id,field,pct){
+  const pi=S.perInsert[id]||{}; const v=pi[field];
+  const disp=(v==null||v==="")?"":(pct?v*100:v);
+  return `<input class="f" type="number" step="any" data-per="${id}" data-field="${field}" data-pct="${pct?1:0}" value="${disp}" placeholder="0">`;
+}
+function inpPerMargen(id,def){
+  const pi=S.perInsert[id]||{}; const v=pi.margenObj;
+  const disp=(v==null||v==="")?"":v*100;
+  return `<input class="f" type="number" step="any" data-per="${id}" data-field="margenObj" data-pct="1" value="${disp}" placeholder="${(def*100).toFixed(1)}">`;
+}
+function insIdInput(i,id){
+  return `<input class="f txt" style="width:92px" data-insid="${i}" value="${escapeHtml(id==null?'':id)}" placeholder="N° inserto">`;
+}
+function nextInsId(){
+  const ids=new Set(S.inserts.map(x=>String(x.id))); let n=1;
+  while(ids.has("NUEVO-"+n)) n++; return "NUEVO-"+n;
+}
+function sortInserts(){
+  S.inserts.sort((a,b)=>String(a.id==null?"":a.id).localeCompare(String(b.id==null?"":b.id),undefined,{numeric:true,sensitivity:"base"}));
+}
+document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||el.dataset.frac===undefined) return;
+  setPath(el.dataset.frac, parseFrac(el.value));
+  save(); renderKPIs(); renderChain(); renderSection(current);
+});
+document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||el.dataset.insid===undefined) return;
+  const i=+el.dataset.insid; const old=String(S.inserts[i].id==null?"":S.inserts[i].id);
+  const nv=el.value.trim();
+  if(nv===old) return;
+  if(nv!=="" && S.inserts.some((x,j)=>j!==i && String(x.id)===nv)){
+    alert("Ya existe un inserto con el número "+nv+". Usa un número distinto.");
+    el.value=old; return;
+  }
+  if(nv!==""){
+    if(S.perInsert[old]){ S.perInsert[nv]=S.perInsert[old]; if(nv!==old) delete S.perInsert[old]; }
+    S.ruta.forEach(r=>{ if(String(r.ins)===old) r.ins=nv; });
+  }
+  S.inserts[i].id=nv;
+  sortInserts();
+  save(); renderKPIs(); renderChain(); renderSection(current);
+});
+document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||!el.dataset.per) return;
+  const id=el.dataset.per, field=el.dataset.field;
+  if(!S.perInsert[id]) S.perInsert[id]={};
+  if(el.value===""){ S.perInsert[id][field]=null; }
+  else { let val=parseFloat(el.value); if(el.dataset.pct==="1") val=val/100; S.perInsert[id][field]=val; }
+  save(); renderKPIs(); renderChain(); renderSection(current);
+});
+
+/* ---------- COSTEO DE PLACAS (diseño de material por inserto) ---------- */
+let disenoSel=null;
+function secDiseno(R){
+  if(!S.inserts.length) return head("Costeo de placas","INSERTO","")+`<div class="note">Aún no hay insertos. Agrégalos en la sección Costeo integral.</div>`;
+  if(disenoSel==null||!S.inserts.some(x=>String(x.id)===String(disenoSel))) disenoSel=String(S.inserts[0].id);
+  const idx=S.inserts.findIndex(x=>String(x.id)===String(disenoSel));
+  const ins=S.inserts[idx]; ensureDiseno(ins);
+  const dz=disenoCalc(ins)||{mats:ins.diseno.materiales.map(matEff),piezas:[],totalUSD:0};
+  const it=R.integral.find(x=>String(x.ins.id)===String(disenoSel))||{};
+  const catNames=(S.catalogo||[]).map(m=>m.nombre);
+  const insOpts=S.inserts.map(x=>`<option ${String(x.id)===String(disenoSel)?'selected':''}>${escapeHtml(String(x.id))}</option>`).join("");
+
+  const matRows=[0,1,2].map(k=>{
+    const slot=ins.diseno.materiales[k]||{}; const eff=matEff(slot);
+    return `<tr>
+      <td class="l mono">M${k+1}</td>
+      <td class="l">${selRaw(`inserts.${idx}.diseno.materiales.${k}.nombre`,["(manual)"].concat(catNames),slot.nombre||"(manual)")}</td>
+      <td>${ovInput(`inserts.${idx}.diseno.materiales.${k}.precio`,eff.precio?('$'+eff.precio):'$ placa')}</td>
+      <td>${fracInput(`inserts.${idx}.diseno.materiales.${k}.largo`,toFrac(eff.largo)||'in')}</td>
+      <td>${fracInput(`inserts.${idx}.diseno.materiales.${k}.ancho`,toFrac(eff.ancho)||'in')}</td>
+      <td>${fracInput(`inserts.${idx}.diseno.materiales.${k}.grosor`,toFrac(eff.grosor)||'in')}</td>
+      <td class="mono val-calc">${(eff.largo>0&&eff.ancho>0)?fN(eff.largo*eff.ancho,0)+' in²':'—'}</td></tr>`;
+  }).join("");
+
+  const pRows=dz.piezas.map((p,j)=>`<tr>
+    <td class="l">${selRaw(`inserts.${idx}.diseno.piezas.${j}.comp`,(COMPONENTES.includes(p.comp)?COMPONENTES:[p.comp||""].concat(COMPONENTES)),p.comp||"Tapa / Base")}</td>
+    <td>${fracInput(`inserts.${idx}.diseno.piezas.${j}.m1`,'0')}</td>
+    <td>${fracInput(`inserts.${idx}.diseno.piezas.${j}.m2`,'0')}</td>
+    <td>${fracInput(`inserts.${idx}.diseno.piezas.${j}.grosor`,'0')}</td>
+    <td>${selRaw(`inserts.${idx}.diseno.piezas.${j}.mat`,["1","2","3"],String(p.mat||1))}</td>
+    <td>${inp(`inserts.${idx}.diseno.piezas.${j}.cant`)}</td>
+    <td class="mono val-calc">${p.o1} / ${p.o2}</td>
+    <td>${ovInput(`inserts.${idx}.diseno.piezas.${j}.piezasManual`,String(Math.max(p.o1,p.o2)))}</td>
+    <td class="mono val-calc">${fPct(p.aprov)}</td>
+    <td class="mono val-calc">${fUSD(p.costoUnit)}</td>
+    <td class="mono val-calc" style="font-weight:700">${fUSD(p.costoInserto)}</td>
+    <td><button class="del" onclick="app.delPieza(${idx},${j})">✕</button></td></tr>`).join("");
+
+  const q26=num(ins.q26), matUSD=dz.totalUSD, util=q26-matUSD;
+  // Requerimiento de material por cantidad terminada
+  const Q=num(ins.diseno.qDeseada);
+  const reqPiezas=dz.piezas.map(p=>{
+    const piezasTot=num(p.cant)*Q;
+    const placasFrac=p.ppp>0?piezasTot/p.ppp:0;
+    const placas=Math.ceil(placasFrac-1e-9);
+    return {...p,piezasTot,placasFrac,placas};
+  });
+  const matReq=[0,1,2].map(k=>{
+    const eff=dz.mats[k]||matEff({});
+    const rows=reqPiezas.filter(p=>(num(p.mat)||1)-1===k);
+    if(!rows.length||!(eff.precio>0)) return null;
+    const placasFrac=rows.reduce((a,p)=>a+p.placasFrac,0);
+    const placasComprar=Math.ceil(placasFrac-1e-9);
+    return {k,nombre:eff.nombre||("M"+(k+1)),precio:eff.precio,placasFrac,placasComprar,
+      costoTeorico:rows.reduce((a,p)=>a+p.costoInserto,0)*Q, costoPlacas:placasComprar*eff.precio};
+  }).filter(Boolean);
+  const totalTeorico=matUSD*Q, totalPlacas=matReq.reduce((a,m)=>a+m.costoPlacas,0);
+  const precioMXN=num(it.precioClMXN), costoIntMXN=num(it.costoIntegral), completeIt=!!it.complete;
+  const ingresoTot=precioMXN*Q, utilIntTot=completeIt?num(it.utilidad)*Q:null;
+  const contribTot=(precioMXN-num(it.materialMXN))*Q;
+  const reqPzRows=reqPiezas.map(p=>`<tr>
+    <td class="l">${escapeHtml(String(p.comp||''))}</td><td class="mono">M${p.mat||1}</td>
+    <td class="mono">${fN(num(p.cant),0)}</td><td class="mono val-calc" style="font-weight:600">${fN(p.piezasTot,0)}</td>
+    <td class="mono">${p.ppp}</td><td class="mono val-calc">${fN(p.placasFrac,2)}</td>
+    <td class="mono val-calc" style="font-weight:600">${p.placas}</td></tr>`).join("");
+  const reqMatRows=matReq.map(m=>`<tr>
+    <td class="l">${escapeHtml(m.nombre)}</td><td class="mono val-calc">${fN(m.placasFrac,2)}</td>
+    <td class="mono val-calc" style="font-weight:600">${m.placasComprar}</td>
+    <td class="mono">${fUSD(m.precio)}</td><td class="mono val-calc">${fUSD(m.costoTeorico)}</td>
+    <td class="mono val-calc" style="font-weight:600">${fUSD(m.costoPlacas)}</td></tr>`).join("");
+  const reqBlock = Q>0 ? `
+    <div class="grid2" style="margin-top:0">
+      <div class="card"><h3>Piezas a cortar (para ${fN(Q,0)} insertos)</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
+        <table><thead><tr><th class="l">Componente</th><th>Mat.</th><th>Pzas/inserto</th><th>Piezas totales</th><th>Pzas/placa</th><th>Placas (teórico)</th><th>Placas a cortar</th></tr></thead>
+        <tbody>${reqPzRows||'<tr><td colspan="7" class="l" style="color:var(--muted2)">Sin piezas.</td></tr>'}</tbody></table></div></div></div>
+      <div class="card"><h3>Costo del material total</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
+        <table><thead><tr><th class="l">Material</th><th>Placas (teórico)</th><th>Placas a comprar</th><th>Precio placa</th><th>Costo teórico</th><th>Costo placas completas</th></tr></thead>
+        <tbody>${reqMatRows||'<tr><td colspan="6" class="l" style="color:var(--muted2)">Define materiales y piezas.</td></tr>'}
+          <tr class="total"><td class="l">Totales</td><td></td><td></td><td></td><td class="mono">${fUSD(totalTeorico)}</td><td class="mono">${fUSD(totalPlacas)}</td></tr>
+          <tr><td class="l">Costo total en pesos (× TC ${fN(R.tc,4)})</td><td colspan="3"></td><td class="mono val-calc">${fMXN(totalTeorico*R.tc)}</td><td class="mono val-calc">${fMXN(totalPlacas*R.tc)}</td></tr>
+          <tr><td class="l">Precio de venta total (MXN)</td><td colspan="4"></td><td class="mono val-calc">${fMXN(ingresoTot)}</td></tr>
+          <tr><td class="l">${completeIt?'Costo integral total (MXN)':'Costo integral (falta capturar ruta)'}</td><td colspan="4"></td><td class="mono val-calc">${completeIt?fMXN(costoIntMXN*Q):'—'}</td></tr>
+          <tr class="total"><td class="l">${completeIt?'Utilidad total (MXN)':'Contribución total antes de conversión (MXN)'}</td><td colspan="4"></td><td class="mono">${completeIt?fMXN(utilIntTot):fMXN(contribTot)}</td></tr>
+        </table></div>
+        <div class="hint" style="padding:6px 12px">Costo teórico = costo unitario × cantidad (fraccional, ideal). Costo por placas completas = redondeando a placas enteras a comprar por material; la diferencia es el desperdicio por placa incompleta${totalTeorico>0?(' ('+fPct((totalPlacas-totalTeorico)/totalTeorico)+')'):''}.</div></div></div>
+    </div>` : `<div class="note">Captura la cantidad de insertos deseados para ver las piezas a cortar y el costo total del material.</div>`;
+  const matMXN=matUSD*R.tc;
+  const catRows=(S.catalogo||[]).map((m,k)=>`<tr>
+    <td class="l">${inp(`catalogo.${k}.nombre`,{type:"text",cls:"txt wide"})}</td>
+    <td>${fracInput(`catalogo.${k}.grosor`,'in')}</td>
+    <td>${fracInput(`catalogo.${k}.ancho`,'in')}</td>
+    <td>${fracInput(`catalogo.${k}.largo`,'in')}</td>
+    <td>${inp(`catalogo.${k}.costo`)}</td>
+    <td><button class="del" onclick="app.delMaterial(${k})">✕</button></td></tr>`).join("");
+
+  return head("Costeo de placas — optimización de corte","INSERTO (hoja individual del Excel)",
+    "Aquí capturas lo que antes vivía en la hoja de cada inserto: las placas de foam (hasta 3 materiales), las piezas (base, laterales, tapa…) con sus medidas y cantidad, y el aprovechamiento por placa. El costo del material resultante alimenta automáticamente el <b>Costeo integral</b>. Las medidas aceptan <b>fracciones</b> (ej. <b>17 3/4</b>, <b>3/8</b>) o decimales. Piezas por placa = máximo entre las dos orientaciones; puedes forzar el valor real de tu corte optimizado.")
+  +`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <div class="exsel" style="display:inline-flex"><span>Inserto</span>
+        <select onchange="app.setDiseno(this.value)">${insOpts}</select></div>
+      <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="app.delInsert(${idx})">Eliminar inserto</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="newInsId" class="f txt" style="width:170px" placeholder="Número del nuevo inserto" onkeydown="if(event.key==='Enter'){event.preventDefault();app.addNamedInsert();}">
+        <button class="btn primary" onclick="app.addNamedInsert()">+ Crear inserto</button>
+      </div>
+    </div>
+
+    <div class="card"><h3>Placas / materiales del inserto (hasta 3)</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
+      <table><thead><tr><th class="l">#</th><th class="l">Material (catálogo o manual)</th><th>Precio placa $</th><th>Largo in</th><th>Ancho in</th><th>Grosor in</th><th>Área placa</th></tr></thead>
+      <tbody>${matRows}</tbody></table></div>
+      <div class="hint" style="padding:6px 12px">Elige el material del catálogo y su precio y medidas se toman solos (déjalos en blanco para usar el catálogo, o captura un valor para sobreescribir). Usa "(manual)" para un material fuera del catálogo.</div></div></div>
+
+    <div class="card" style="margin-top:16px"><h3>Piezas / componentes</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
+      <table><thead><tr><th class="l">Componente</th><th>Medida 1 in</th><th>Medida 2 in</th><th>Grosor in</th><th>Mat.</th><th>Cant./inserto</th><th>Pzas/placa (o1/o2)</th><th>Pzas/placa (usar)</th><th>Aprov.</th><th>Costo unit. $</th><th>Costo inserto $</th><th></th></tr></thead>
+      <tbody>${pRows||`<tr><td colspan="12" class="l" style="color:var(--muted2)">Sin piezas. Agrega la primera con el botón de abajo.</td></tr>`}</tbody></table></div>
+      <button class="rowbtn" onclick="app.addPieza(${idx})">+ Agregar pieza</button></div></div>
+
+    <div class="grid2" style="margin-top:16px">
+      <div class="card"><h3>Resultado del inserto ${escapeHtml(String(ins.id))}</h3><div class="pad"><table>
+        <tr class="total"><td class="l">Costo de material (Q25)</td><td class="mono">${fUSD(matUSD)}</td></tr>
+        <tr><td class="l">Material en pesos (× TC ${fN(R.tc,4)})</td><td class="mono val-calc">${fMXN(matMXN)}</td></tr>
+        <tr><td class="l">Precio cliente (US$, editable)</td><td>${inp(`inserts.${idx}.q26`)}</td></tr>
+        <tr><td class="l">Contribución antes de conversión</td><td class="mono val-calc">${fUSD(util)}</td></tr>
+        <tr><td class="l">Contribución % sobre venta</td><td class="mono val-calc">${q26>0?fPct(util/q26):'—'}</td></tr>
+      </table><div class="note" style="margin-top:10px">Este costo de material entra al <b>Costeo integral</b> como material del inserto. La utilidad final se calcula ahí, ya con mano de obra, máquina e indirectos de la <b>Ruta de proceso</b>.</div></div></div>
+      <div class="card"><h3>Desglose por pieza</h3><div class="body"><table>
+        <thead><tr><th class="l">Componente</th><th>Mat.</th><th>Costo inserto</th><th>% del material</th></tr></thead>
+        <tbody>${dz.piezas.map(p=>`<tr><td class="l">${escapeHtml(String(p.comp||''))}</td><td class="mono">M${p.mat||1}</td>
+          <td class="mono val-calc">${fUSD(p.costoInserto)}</td><td class="mono">${matUSD>0?fPct(p.costoInserto/matUSD):'—'}</td></tr>`).join("")||`<tr><td colspan="4" class="l" style="color:var(--muted2)">—</td></tr>`}</tbody></table></div></div>
+    </div>
+
+    <div class="card" style="margin-top:16px"><h3>Requerimiento de material por cantidad terminada</h3><div class="pad">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <span class="hint">Cantidad de insertos deseados:</span>
+        ${inp(`inserts.${idx}.diseno.qDeseada`,{ph:"0"})}
+      </div></div></div>${reqBlock}
+
+    <div class="card" style="margin-top:16px"><h3>Catálogo de placas (materiales) <span class="hint" style="font-weight:400">— compartido por todos los insertos</span></h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
+      <table><thead><tr><th class="l">Material</th><th>Grosor in</th><th>Ancho in</th><th>Largo in</th><th>Costo placa $</th><th></th></tr></thead>
+      <tbody>${catRows}</tbody></table></div>
+      <button class="rowbtn" onclick="app.addMaterial()">+ Agregar material</button>
+      <div class="hint" style="padding:6px 12px">Al actualizar el precio o medida de una placa aquí, se recalculan todos los insertos que la usan.</div></div></div>`;
+}
+
+/* ---------- DIAGRAMA DE CORTE (orientación óptima) ---------- */
+const NESTPAL=['#2f9e8f','#0d7d8c','#6bbf9e','#e0a800','#cf3f52','#7d6bbf','#c98a3a','#3a86c9'];
+function cutCalc(p,mat){
+  const L=num(mat.largo),A=num(mat.ancho),m1=num(p.m1),m2=num(p.m2);
+  if(!(L>0&&A>0&&m1>0&&m2>0)) return null;
+  const o1=Math.floor(L/m1)*Math.floor(A/m2), o2=Math.floor(L/m2)*Math.floor(A/m1);
+  const useO2=o2>o1, cols=useO2?Math.floor(L/m2):Math.floor(L/m1), rows=useO2?Math.floor(A/m1):Math.floor(A/m2);
+  const ppp=Math.max(o1,o2), aprov=(L*A>0)?(ppp*m1*m2)/(L*A):0;
+  return {L,A,m1,m2,o1,o2,useO2,cols,rows,pw:(useO2?m2:m1),ph:(useO2?m1:m2),ppp,aprov};
+}
+function plateSVG(p,mat){
+  const d=cutCalc(p,mat); if(!d) return null;
+  const maxW=380,maxH=250, scale=Math.min(maxW/d.L,maxH/d.A), w=d.L*scale, h=d.A*scale;
+  let rects="";
+  for(let r=0;r<d.rows;r++) for(let c=0;c<d.cols;c++){
+    const x=(c*d.pw*scale).toFixed(1), y=(r*d.ph*scale).toFixed(1);
+    rects+=`<rect x="${x}" y="${y}" width="${(d.pw*scale-1).toFixed(1)}" height="${(d.ph*scale-1).toFixed(1)}" rx="1.5" fill="#2f9e8f" stroke="#ffffff" stroke-width="0.8"/>`;
+  }
+  const svg=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" style="max-width:${w.toFixed(0)}px;height:auto;display:block;border-radius:6px">
+    <defs><pattern id="hatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="#cbd3da" stroke-width="2"/></pattern></defs>
+    <rect x="0" y="0" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="url(#hatch)" stroke="#98a2ac" stroke-width="1.2"/>${rects}</svg>`;
+  return {svg,cols:d.cols,rows:d.rows,ppp:d.ppp,aprov:d.aprov,useO2:d.useO2,o1:d.o1,o2:d.o2};
+}
+function fillPlateMixed(types,L,A){
+  const minArea=Math.min(...types.map(t=>t.w*t.h));
+  const reps=Math.max(2,Math.ceil((L*A)/(minArea*types.reduce((a,t)=>a+Math.max(1,t.cant),0)))+2);
+  let pool=[];
+  for(let r=0;r<reps;r++) types.forEach(t=>{ for(let i=0;i<Math.max(1,Math.round(t.cant));i++) pool.push(t); });
+  pool.sort((a,b)=>b.h-a.h);
+  const shelves=[]; const placements=[]; let used=0, totalH=0; const tally={};
+  for(const t of pool){
+    let w=t.w,h=t.h; if(w>L){[w,h]=[h,w];} if(w>L||h>A) continue;
+    let sh=shelves.find(s=> s.usedW+w<=L+1e-6 && h<=s.h+1e-6);
+    if(!sh && totalH+h<=A+1e-6){ sh={y:totalH,h:h,usedW:0}; shelves.push(sh); totalH+=h; }
+    if(!sh) continue;
+    placements.push({x:sh.usedW,y:sh.y,w,h,color:t.color}); sh.usedW+=w; used+=w*h;
+    tally[t.comp]=(tally[t.comp]||0)+1;
+  }
+  return {placements,used,aprov:(L*A>0?used/(L*A):0),tally,total:placements.length};
+}
+function nestPlateSVG(placements,L,A){
+  const maxW=380,maxH=250, scale=Math.min(maxW/L,maxH/A), w=L*scale, h=A*scale;
+  const rects=placements.map(p=>`<rect x="${(p.x*scale).toFixed(1)}" y="${(p.y*scale).toFixed(1)}" width="${(p.w*scale-1).toFixed(1)}" height="${(p.h*scale-1).toFixed(1)}" rx="1.2" fill="${p.color}" stroke="#ffffff" stroke-width="0.7"/>`).join("");
+  return `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" style="max-width:${w.toFixed(0)}px;height:auto;display:block;border-radius:6px">
+    <defs><pattern id="hatch2" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="#cbd3da" stroke-width="2"/></pattern></defs>
+    <rect width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="url(#hatch2)" stroke="#98a2ac" stroke-width="1.2"/>${rects}</svg>`;
+}
+function secDiagrama(R){
+  if(!S.inserts.length) return head("Diagrama de corte","")+`<div class="note">Aún no hay insertos. Agrégalos en Costeo integral o Costeo de placas.</div>`;
+  if(disenoSel==null||!S.inserts.some(x=>String(x.id)===String(disenoSel))) disenoSel=String(S.inserts[0].id);
+  const idx=S.inserts.findIndex(x=>String(x.id)===String(disenoSel));
+  const ins=S.inserts[idx]; ensureDiseno(ins);
+  const dz=disenoCalc(ins)||{mats:ins.diseno.materiales.map(matEff),piezas:[]};
+  const insOpts=S.inserts.map(x=>`<option ${String(x.id)===String(disenoSel)?'selected':''}>${escapeHtml(String(x.id))}</option>`).join("");
+  let blocks="", usedArea=0, plateAreaTot=0, hay=false;
+  dz.piezas.forEach(p=>{
+    const mat=dz.mats[(num(p.mat)||1)-1]||matEff({});
+    const d=plateSVG(p,mat);
+    if(!d){
+      blocks+=`<div class="card" style="margin-top:14px"><h3>${escapeHtml(p.comp||'Pieza')}</h3><div class="pad"><div class="note">Captura las medidas de la pieza y de la placa (en Costeo de placas) para ver su diagrama de corte.</div></div></div>`;
+      return;
+    }
+    hay=true;
+    usedArea+=d.ppp*num(p.m1)*num(p.m2); plateAreaTot+=num(mat.largo)*num(mat.ancho);
+    const merma=1-d.aprov;
+    blocks+=`<div class="card" style="margin-top:14px"><h3>${escapeHtml(p.comp||'Pieza')} <span class="hint" style="font-weight:400">· ${escapeHtml(mat.nombre||('Material '+(p.mat||1)))}</span></h3>
+      <div class="pad"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:280px">${d.svg}
+          <div class="legend" style="margin-top:8px"><span><span class="sw" style="background:#2f9e8f"></span>Aprovechado (${d.ppp} pzas)</span><span><span class="sw" style="background:#cbd3da"></span>Merma (recorte)</span></div></div>
+        <div style="min-width:220px"><table>
+          <tr><td class="l">Placa (largo × ancho)</td><td class="mono val-calc">${fN(num(mat.largo),1)} × ${fN(num(mat.ancho),1)} in</td></tr>
+          <tr><td class="l">Pieza (med. 1 × med. 2)</td><td class="mono val-calc">${fN(num(p.m1),2)} × ${fN(num(p.m2),2)} in</td></tr>
+          <tr><td class="l">Orientación óptima</td><td class="mono val-calc">${d.useO2?'Rotada 90° (Orient. 2)':'Normal (Orient. 1)'}</td></tr>
+          <tr><td class="l">Acomodo (columnas × filas)</td><td class="mono val-calc">${d.cols} × ${d.rows}</td></tr>
+          <tr class="total"><td class="l">Piezas por placa</td><td class="mono">${d.ppp}</td></tr>
+          <tr><td class="l">Comparación O1 / O2</td><td class="mono val-calc">${d.o1} / ${d.o2}</td></tr>
+          <tr><td class="l">Aprovechamiento</td><td class="mono" style="color:#0f7a3d;font-weight:700">${fPct(d.aprov)}</td></tr>
+          <tr><td class="l">Merma</td><td class="mono" style="color:#a32636;font-weight:700">${fPct(merma)}</td></tr>
+        </table></div>
+      </div></div></div>`;
+  });
+  const aprovTot=plateAreaTot>0?usedArea/plateAreaTot:0;
+  // Nesting combinado por material
+  const compColors={}; let ci=0;
+  dz.piezas.forEach(p=>{ if(!(p.comp in compColors)){ compColors[p.comp]=NESTPAL[ci%NESTPAL.length]; ci++; } });
+  const byMat={0:[],1:[],2:[]};
+  dz.piezas.forEach(p=>{ if(num(p.m1)>0&&num(p.m2)>0) byMat[(num(p.mat)||1)-1].push(p); });
+  let nest="";
+  [0,1,2].forEach(k=>{
+    const mat=dz.mats[k]||matEff({}); const ps=byMat[k];
+    if(!ps.length || !(num(mat.largo)>0&&num(mat.ancho)>0)) return;
+    if(ps.length<2) return; // el nesting combinado aplica cuando hay 2+ piezas en la misma placa
+    const types=ps.map(p=>({comp:p.comp,color:compColors[p.comp],w:Math.max(num(p.m1),num(p.m2)),h:Math.min(num(p.m1),num(p.m2)),cant:num(p.cant)||1}));
+    const res=fillPlateMixed(types,num(mat.largo),num(mat.ancho));
+    const tallyRows=Object.keys(res.tally).map(c=>`<tr><td class="l"><span class="sw" style="background:${compColors[c]}"></span>${escapeHtml(c)}</td><td class="mono val-calc">${res.tally[c]}</td></tr>`).join("");
+    nest+=`<div class="card" style="margin-top:14px"><h3>Nesting combinado · ${escapeHtml(mat.nombre||('Material '+(k+1)))}</h3>
+      <div class="pad"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:280px">${nestPlateSVG(res.placements,num(mat.largo),num(mat.ancho))}
+          <div class="hint" style="margin-top:6px">Piezas de distintos componentes acomodadas juntas en una sola lámina.</div></div>
+        <div style="min-width:220px"><table>
+          <tr class="sub"><td class="l">Componente</td><td>Pzas en la lámina</td></tr>
+          ${tallyRows}
+          <tr class="total"><td class="l">Total por lámina (combinado)</td><td class="mono">${res.total}</td></tr>
+          <tr><td class="l">Aprovechamiento combinado</td><td class="mono" style="color:#0f7a3d;font-weight:700">${fPct(res.aprov)}</td></tr>
+          <tr><td class="l">Merma combinada</td><td class="mono" style="color:#a32636;font-weight:700">${fPct(1-res.aprov)}</td></tr>
+        </table>
+        <div class="note" style="margin-top:10px">Acomodo heurístico por hileras. Reduce merma cuando las piezas se complementan; si una pieza grande domina la lámina, puede rendir más cortándola sola (ver diagrama por pieza arriba).</div></div>
+      </div></div></div>`;
+  });
+  const nestSec = nest ? `<div class="sechead" style="margin-top:20px"><h2 style="font-size:15px">Nesting combinado por material</h2></div>${nest}` : "";
+  const resumen = hay ? `<div class="hero" style="margin-top:6px">
+      ${hcard("Aprovechamiento promedio", fPct(aprovTot), "de la superficie de lámina", aprovTot>=0.85?"v":(aprovTot>=0.7?"a":"r"))}
+      ${hcard("Merma promedio", fPct(1-aprovTot), "recorte de lámina", (1-aprovTot)<=0.15?"v":((1-aprovTot)<=0.3?"a":"r"))}
+      ${hcard("Piezas / componentes", String(dz.piezas.length), "en este inserto")}
+    </div>` : "";
+  return head("Diagrama de corte — orientación óptima de láminas","OPTIMIZACIÓN DE CORTE",
+    "Para cada pieza se dibuja la mejor orientación de corte en la lámina (la que rinde más piezas por placa), comparando las dos orientaciones. <b>Verde</b> = superficie aprovechada; <b>gris rayado</b> = merma (recorte). Cambia las medidas en Costeo de placas y el diagrama se actualiza.")
+  +`<div class="exsel" style="display:inline-flex;margin-bottom:6px"><span>Inserto</span>
+      <select onchange="app.setDiagrama(this.value)">${insOpts}</select></div>
+    ${resumen}${blocks}${nestSec}`;
+}
+
+/* ---------- VALIDACIÓN ---------- */
+function secValidacion(R){
+  const rows=R.valid.map(v=>`<tr><td class="l">${v.k}</td><td class="mono val-calc">${v.v}</td>
+    <td class="l"><span class="pill ${v.rev?'rev':'ok'}">${v.rev?'REVISAR':'OK'}</span></td></tr>`).join("");
+  const pend=[];
+  if(S.capacidad.horasUsadas==null) pend.push("Horas realmente utilizadas (Capacidad)");
+  if(S.energia.reciboReal==null) pend.push("Recibo real de CFE (Energía)");
+  if(R.moParams) {}
+  const rutaPend=S.inserts.filter(ins=>!R.integral.find(x=>x.ins.id===ins.id&&x.conversion>0)).map(x=>x.id);
+  return head("Validación","VALIDACION",
+    "Controles de integridad. Ninguno marca OK cuando falta información; revisa todo lo que no esté en 0 / OK.")
+  +`<div class="grid2">
+    <div class="card"><h3>Controles</h3><div class="body"><table>${rows}</table></div></div>
+    <div class="card"><h3>Pendientes por capturar</h3><div class="pad">
+      <div class="note" style="border:0;background:none;padding:0">
+        ${pend.length?"<b>Costos clave:</b><br>• "+pend.join("<br>• "):"Sin costos clave pendientes."}
+        <br><br><b>Insertos sin ruta con tiempos:</b><br>${rutaPend.length?"• "+rutaPend.join(", "):"Ninguno"}
+      </div></div></div>
+  </div>`;
+}
+
+/* ===================== PANEL EJECUTIVO ===================== */
+let CHARTS=[];
+function mkChart(id,cfg){const el=document.getElementById(id);if(!el)return;try{CHARTS.push(new Chart(el,cfg));}catch(e){console.warn(e);}}
+let sensMetric="tasa";
+const PAL=['#2b5488','#2f9e8f','#6bbf9e','#b7d9a8','#e0a800','#cf3f52','#6c7a89','#8a97a3'];
+const SEM={v:'#1f9d55',a:'#e0a800',r:'#cf3f52',g:'#b0bac3'};
+function destroyCharts(){CHARTS.forEach(c=>{try{c.destroy();}catch(e){}});CHARTS=[];}
+
+function secDashboard(R){
+  const scn=S.control.escenario;
+  const util=R.utilPct;
+  const ready=R.readyCount, total=R.integral.length;
+  const readyLuz = ready===0?"g":(ready<total?"a":"v");
+  const bajoObj=R.integral.filter(i=>i.complete&&i.margenReal<i.margenObj).length;
+  const bajoCosto=R.integral.filter(i=>i.complete&&i.utilidad<0).length;
+  // Segundo hero adaptativo
+  const margenCard = R.margenPond!=null
+    ? hcard("Margen ponderado", fPct(R.margenPond), (R.margenPond>=(num(S.control.margenObj)+f("deltaMargen"))?"cumple objetivo":"bajo el objetivo"), R.margenPond<0?"r":(R.margenPond<(num(S.control.margenObj))?"a":"v"))
+    : hcard("Margen ponderado", "—", "requiere ruta y volumen", "g");
+  const ingresoCard = R.anyVol
+    ? hcard("Ingreso mensual", fMXN0(R.ingresoMesTot), "de los insertos con volumen", "")
+    : hcard("Contribución unit. prom.", fMXN(promedio(R.integral.map(i=>i.contribUnit))), "precio − material (antes de conversión)", "");
+  const utilCard = R.anyVol && R.utilMesComp
+    ? hcard("Utilidad mensual", fMXN0(R.utilMesComp), "insertos completos con volumen", R.utilMesComp<0?"r":"v")
+    : hcard("Utilidad mensual", "—", "captura volumen y ruta", "g");
+  const ociosaCard = R.ociosaCosto!=null
+    ? hcard("Costo de capacidad ociosa", fMXN0(R.ociosaCosto), fN(R.ociosa,0)+" h/mes sin absorber", R.ociosa>0?"a":"v")
+    : hcard("Capacidad ociosa", "—", "captura horas utilizadas", "g");
+
+  return `
+    <div class="exhead">
+      <h2>Panel ejecutivo</h2>
+      <div class="exsel"><span>Escenario</span>
+        <div class="seges">
+          ${["Base","Conservador","Estrés"].map(s=>`<button class="${s===scn?'on':''}" onclick="app.setEscenario('${s}')">${s}</button>`).join("")}
+        </div>
+      </div>
+      <span class="hint" style="margin-left:auto">${new Date().toLocaleDateString("es-MX",{day:'2-digit',month:'long',year:'numeric'})}</span>
+    </div>
+    <p class="lead">Indicadores para toma de decisiones. Cambia el escenario y todo se recalcula en vivo: úsalo proyectado en la junta para comparar Base, Conservador y Estrés.</p>
+
+    <div class="hero">
+      ${hcard("Tipo de cambio "+(S.control.tcFecha?("· "+escapeHtml(String(S.control.tcFecha))):"(MXN/USD)"), "$"+fN(R.tc,4), scn==="Base"?"FIX efectivo":"efectivo en "+scn, "", true)}
+      ${hcard("Pool de manufactura", fMXN0(R.pool), "costo mensual a absorber")}
+      ${hcard("Tasa de planta", R.tasaPlanta==null?"—":fMXN(R.tasaPlanta), "por hora productiva")}
+      ${hcard("Capacidad práctica", fN(R.capPractica,0)+' <small>h/mes</small>', util==null?"utilización sin capturar":("utilización "+fPct(util)), util==null?"g":(util<0.7?"a":"v"))}
+      ${hcard("Insertos costeados", ready+" / "+total, ready<total?(total-ready)+" requieren ruta":"todos completos", readyLuz)}
+    </div>
+    <div class="hero">
+      ${margenCard}${ingresoCard}${utilCard}${ociosaCard}
+    </div>
+
+    <div class="exgrid">
+      <div class="card"><h3>Salud del portafolio</h3><div class="chartbox"><canvas id="ch_health"></canvas></div></div>
+      <div class="card"><h3>Estructura del pool de manufactura</h3><div class="chartbox"><canvas id="ch_pool"></canvas></div></div>
+      <div class="card full"><h3>Precio cliente vs. costo por inserto <span class="hint" style="font-weight:400">(MXN/pza)</span></h3><div style="overflow-x:auto"><div class="chartbox tall" style="min-width:${Math.max(560,R.integral.length*46)}px"><canvas id="ch_price"></canvas></div></div></div>
+      <div class="card full"><h3>Margen por inserto vs. objetivo</h3><div style="overflow-x:auto"><div class="chartbox tall" style="min-width:${Math.max(560,R.integral.length*46)}px"><canvas id="ch_margin"></canvas></div></div></div>
+      <div class="card">
+        <h3>Sensibilidad por escenario
+          <select class="f" style="margin-left:auto" onchange="app.setSensMetric(this.value)">
+            <option value="tasa" ${sensMetric==='tasa'?'selected':''}>Tasa de planta $/h</option>
+            <option value="pool" ${sensMetric==='pool'?'selected':''}>Pool $/mes</option>
+            <option value="margen" ${sensMetric==='margen'?'selected':''}>Margen ponderado %</option>
+            <option value="utilidad" ${sensMetric==='utilidad'?'selected':''}>Utilidad mensual $</option>
+          </select>
+        </h3><div class="chartbox"><canvas id="ch_sens"></canvas></div></div>
+      <div class="card"><h3>Decisiones sugeridas</h3><ul class="insights">${insights(R,bajoObj,bajoCosto)}</ul></div>
+    </div>`;
+}
+function hcard(k,v,d,luz="",accent=false){
+  return `<div class="hcard ${accent?'accent':''} ${luz}">${(!accent&&luz)?'<div class="bar"></div>':''}
+    <div class="k">${k}</div><div class="v mono">${v}</div>${d?`<div class="d">${d}</div>`:''}</div>`;
+}
+function promedio(arr){const v=arr.filter(x=>isFinite(x)); return v.length?v.reduce((a,b)=>a+b,0)/v.length:0;}
+function insights(R,bajoObj,bajoCosto){
+  const li=[]; const objG=num(S.control.margenObj)+f("deltaMargen");
+  const inc=R.integral.filter(i=>!i.complete).length;
+  if(inc>0) li.push(["info",`<b>${inc} de ${R.integral.length} insertos</b> requieren captura de tiempos de ruta para tener costo integral y precio válidos.`]);
+  if(bajoCosto>0) li.push(["risk",`<b>${bajoCosto} inserto(s)</b> se venden por debajo de su costo integral: revisar precio o costo de inmediato.`]);
+  const gap=R.integral.filter(i=>i.complete&&i.precioSug!=null&&i.precioClMXN<i.precioSug);
+  if(gap.length>0) li.push(["warn",`<b>${gap.length} inserto(s)</b> por debajo del precio con margen objetivo (${fPct(objG)}): oportunidad de ajuste de precio.`]);
+  // material share
+  const comp=R.integral.filter(i=>i.complete);
+  if(comp.length){ const ms=promedio(comp.map(i=>i.costoIntegral>0?i.materialMXN/i.costoIntegral:0));
+    li.push(["info",`El material representa en promedio <b>${fPct(ms)}</b> del costo integral; es la palanca de negociación con proveedor más relevante.`]); }
+  if(R.ociosaCosto!=null && R.ociosa>0) li.push(["warn",`La capacidad ociosa cuesta <b>${fMXN0(R.ociosaCosto)}/mes</b> (${fN(R.ociosa,0)} h sin absorber): más volumen o menos costo fijo mejora la tasa.`]);
+  // estrés
+  const base=computeFor("Base"), est=computeFor("Estrés");
+  if(est.tasaPlanta!=null && base.tasaPlanta!=null && Math.abs(est.tasaPlanta-base.tasaPlanta)>0.01){
+    const d=(est.tasaPlanta/base.tasaPlanta-1);
+    li.push(["info",`En escenario <b>Estrés</b> la tasa de planta pasa a <b>${fMXN(est.tasaPlanta)}/h</b> (${d>=0?'+':''}${fPct(d)} vs. Base).`]);
+  } else {
+    li.push(["info","Captura factores de estrés en <b>Control y escenarios</b> para ver el impacto de tipo de cambio, energía y nómina en esta vista."]);
+  }
+  if(R.margenPond!=null) li.push([R.margenPond>=objG?"ok":"warn",`Margen ponderado del portafolio: <b>${fPct(R.margenPond)}</b> (objetivo ${fPct(objG)}).`]);
+  return li.map(([k,t])=>`<li><span class="ic ${k}">${k==='ok'?'✓':k==='risk'?'!':k==='warn'?'▲':'i'}</span><span>${t}</span></li>`).join("");
+}
+
+function buildDashboardCharts(R){
+  if(typeof Chart==="undefined") return;
+  Chart.defaults.font.family="'IBM Plex Sans',sans-serif";
+  Chart.defaults.font.size=11; Chart.defaults.color="#5f6d7a";
+  const ids=R.integral.map(i=>i.ins.id);
+  const mk=(id,cfg)=>{const el=document.getElementById(id);if(!el)return;try{CHARTS.push(new Chart(el,cfg));}catch(e){console.warn(e);}};
+
+  // A. Salud del portafolio
+  const cnt={v:0,a:0,r:0,g:0}; R.integral.forEach(i=>cnt[i.luz]++);
+  mk("ch_health",{type:"doughnut",
+    data:{labels:["Verde · cumple","Amarillo · bajo objetivo","Rojo · negativo","Incompleto"],
+      datasets:[{data:[cnt.v,cnt.a,cnt.r,cnt.g],backgroundColor:[SEM.v,SEM.a,SEM.r,SEM.g],borderWidth:2,borderColor:"#fff"}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"right",labels:{boxWidth:12,padding:10}}}}});
+
+  // B. Estructura del pool
+  mk("ch_pool",{type:"doughnut",
+    data:{labels:["Energía","Mano de obra directa","Maquinaria","Indirectos fabriles"],
+      datasets:[{data:[R.energiaSubtotal,R.moDirecta,R.maqTotal,R.indFabril],
+        backgroundColor:[PAL[4],PAL[0],PAL[2],PAL[6]],borderWidth:2,borderColor:"#fff"}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"58%",
+      plugins:{legend:{position:"right",labels:{boxWidth:12,padding:10}},
+        tooltip:{callbacks:{label:c=>` ${c.label}: ${fMXN0(c.parsed)} (${fPct(c.parsed/R.pool)})`}}}}});
+
+  // C. Precio vs costo por inserto
+  const costo=R.integral.map(i=>i.complete?i.costoIntegral:i.materialMXN);
+  const precio=R.integral.map(i=>i.precioClMXN);
+  const sug=R.integral.map(i=>i.precioSug);
+  mk("ch_price",{type:"bar",
+    data:{labels:ids,datasets:[
+      {label:"Costo (integral o material s/ruta)",data:costo,backgroundColor:PAL[6],borderRadius:4},
+      {label:"Precio cliente",data:precio,backgroundColor:PAL[0],borderRadius:4},
+      {label:"Precio sugerido (margen obj.)",data:sug,type:"line",borderColor:SEM.a,backgroundColor:SEM.a,
+        borderWidth:2,borderDash:[5,4],pointRadius:3,pointBackgroundColor:SEM.a,spanGaps:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      scales:{y:{ticks:{callback:v=>"$"+v.toLocaleString("es-MX")}}},
+      plugins:{legend:{position:"bottom",labels:{boxWidth:12,padding:12}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y==null?'—':fMXN(c.parsed.y)}`}}}}});
+
+  // D. Margen por inserto
+  const mg=R.integral.map(i=>i.complete?i.margenReal*100:(i.precioClMXN>0?i.contribUnit/i.precioClMXN*100:0));
+  const cols=R.integral.map(i=>i.complete?SEM[i.luz]:"#cfd6dc");
+  const obj=R.integral.map(i=>i.margenObj*100);
+  mk("ch_margin",{type:"bar",
+    data:{labels:ids,datasets:[
+      {label:"Margen real % (o contribución % si s/ruta)",data:mg,backgroundColor:cols,borderRadius:4},
+      {label:"Margen objetivo %",data:obj,type:"line",borderColor:"#16222e",borderWidth:2,borderDash:[5,4],pointRadius:0}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{ticks:{callback:v=>v+"%"}}},
+      plugins:{legend:{position:"bottom",labels:{boxWidth:12,padding:12}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fN(c.parsed.y,1)}%`}}}}});
+
+  // E. Sensibilidad por escenario
+  const scn=["Base","Conservador","Estrés"];
+  const data=scn.map(s=>{const Rs=computeFor(s);
+    if(sensMetric==="tasa")return Rs.tasaPlanta||0;
+    if(sensMetric==="pool")return Rs.pool;
+    if(sensMetric==="margen")return Rs.margenPond!=null?Rs.margenPond*100:0;
+    return Rs.utilMesComp||0;});
+  const fmtSens=v=> sensMetric==="margen"?fN(v,1)+"%":(sensMetric==="tasa"?fMXN(v):fMXN0(v));
+  mk("ch_sens",{type:"bar",
+    data:{labels:scn,datasets:[{data,backgroundColor:[PAL[0],PAL[4],SEM.r],borderRadius:5,
+      barPercentage:.6}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+fmtSens(c.parsed.y)}}},
+      scales:{y:{ticks:{callback:v=>sensMetric==="margen"?v+"%":(v>=1000?"$"+(v/1000).toFixed(0)+"k":"$"+v)}}}}});
+}
+
+/* ===================== PRESUPUESTO Y PUNTO DE EQUILIBRIO ===================== */
+function avgContribRatio(R){
+  const arr=R.integral.filter(i=>i.precioClMXN>0).map(i=>i.contribUnit/i.precioClMXN);
+  return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
+}
+function computePresupuesto(R){
+  const gfManuf=R.pool, gfAdmin=R.indAdmin+R.moAdmin, gfComer=R.indComercial+R.moComercial,
+        gfLog=R.indLog, gfFin=R.indFin, otros=num(S.presupuesto.otrosFijos);
+  const GF=gfManuf+gfAdmin+gfComer+gfLog+gfFin+otros;
+  const ventas=R.ingresoMesTot;
+  const matMes=R.integral.reduce((a,i)=>a+i.materialMXN*i.vol,0);
+  const contribMes=ventas-matMes;
+  const conVol=ventas>0;
+  const ratio=conVol?(ventas>0?contribMes/ventas:0):avgContribRatio(R);
+  const PE=ratio>0?GF/ratio:null;
+  const utilOper=conVol?(contribMes-GF):null;
+  const margenSeg=(conVol&&ventas>0&&PE!=null)?(ventas-PE)/ventas:null;
+  const faltante=(PE!=null&&conVol&&ventas<PE)?(PE-ventas):null;
+  const meta=(S.presupuesto.meta==null||S.presupuesto.meta==="")?null:num(S.presupuesto.meta);
+  return {gfManuf,gfAdmin,gfComer,gfLog,gfFin,otros,GF,ventas,matMes,contribMes,conVol,ratio,PE,utilOper,margenSeg,faltante,meta};
+}
+function secPresupuesto(R){
+  const P=computePresupuesto(R);
+  let estLuz,estTxt;
+  if(!P.conVol){estLuz="g";estTxt="Captura volúmenes para la utilidad real";}
+  else if(P.utilOper>0){estLuz="v";estTxt="La empresa genera utilidad de operación";}
+  else if(Math.abs(P.utilOper)<1){estLuz="a";estTxt="En punto de equilibrio";}
+  else {estLuz="r";estTxt="Por debajo del punto de equilibrio";}
+  const per = (P.PE!=null&&P.ventas>0)?P.PE/P.ventas:null;
+
+  const pnl=`<table>
+    <tr><td class="l">Ventas netas mensuales</td><td class="mono val-calc">${P.conVol?fMXN(P.ventas):'<span class="val-pend">captura volúmenes</span>'}</td></tr>
+    <tr><td class="l">(−) Costo variable — material</td><td class="mono val-calc">${P.conVol?'('+fMXN(P.matMes)+')':'—'}</td></tr>
+    <tr class="sub"><td class="l">= Margen de contribución${P.conVol?' ('+fPct(P.ratio)+')':''}</td><td class="mono">${P.conVol?fMXN(P.contribMes):'—'}</td></tr>
+    <tr><td class="l">(−) Gastos fijos de operación</td><td class="mono val-calc">(${fMXN(P.GF)})</td></tr>
+    <tr class="total"><td class="l">= Utilidad (pérdida) de operación</td><td class="mono">${P.utilOper==null?'—':fMXN(P.utilOper)}</td></tr>
+  </table>`;
+
+  const gf=`<table>
+    <tr><td class="l">Manufactura (energía, MO directa, maquinaria, indirectos fabriles)</td><td class="mono val-calc">${fMXN(P.gfManuf)}</td></tr>
+    <tr><td class="l">Administración (nómina + indirectos)</td><td class="mono val-calc">${fMXN(P.gfAdmin)}</td></tr>
+    <tr><td class="l">Comercial (nómina + indirectos)</td><td class="mono val-calc">${fMXN(P.gfComer)}</td></tr>
+    <tr><td class="l">Logística</td><td class="mono val-calc">${fMXN(P.gfLog)}</td></tr>
+    <tr><td class="l">Financiero (gastos fijos)</td><td class="mono val-calc">${fMXN(P.gfFin)}</td></tr>
+    <tr><td class="l">Otros gastos fijos</td><td>${inp("presupuesto.otrosFijos")}</td></tr>
+    <tr class="total"><td class="l">Total gastos fijos mensuales</td><td class="mono">${fMXN(P.GF)}</td></tr>
+  </table>`;
+
+  const be=`<table>
+    <tr class="total"><td class="l">Punto de equilibrio (ventas)</td><td class="mono">${P.PE==null?'<span class="val-pend">captura precios/volúmenes</span>':fMXN(P.PE)}</td></tr>
+    <tr><td class="l">Margen de contribución usado</td><td class="mono val-calc">${fPct(P.ratio)}${P.conVol?' (ponderado)':' (promedio · sin volumen)'}</td></tr>
+    <tr><td class="l">Equilibrio como % de ventas actuales</td><td class="mono val-calc">${per==null?'—':fPct(per)}</td></tr>
+    <tr><td class="l">Margen de seguridad</td><td class="mono val-calc">${P.margenSeg==null?'—':fPct(P.margenSeg)}</td></tr>
+    <tr><td class="l">Faltante para el equilibrio</td><td class="mono val-calc">${P.faltante==null?(P.conVol?'$0 (ya cubierto)':'—'):fMXN(P.faltante)}</td></tr>
+    <tr><td class="l">Meta de ventas mensual</td><td>${inp("presupuesto.meta",{ph:"opcional"})}</td></tr>
+    <tr><td class="l">Meta vs. equilibrio</td><td class="mono val-calc">${(P.meta!=null&&P.PE!=null)?(P.meta>=P.PE?('+'+fMXN(P.meta-P.PE)+' sobre equilibrio'):(fMXN(P.meta-P.PE))):'—'}</td></tr>
+  </table>`;
+
+  return head("Presupuesto y punto de equilibrio","ESTADO DE RESULTADOS · EQUILIBRIO",
+    "Hoja financiera de la empresa. El costo variable es el material; la mano de obra, maquinaria e indirectos se tratan como gastos fijos del periodo (así es como los capturas, por mes). Punto de equilibrio = gastos fijos ÷ margen de contribución. Captura los volúmenes mensuales por inserto (en Costeo integral) para que refleje tus ventas reales.")
+  +`<div class="hero">
+      ${hcard("Ventas mensuales",P.conVol?fMXN0(P.ventas):"—","con volúmenes capturados","",true)}
+      ${hcard("Margen de contribución",fPct(P.ratio),P.conVol?"ponderado por mezcla":"promedio (sin volumen)")}
+      ${hcard("Gastos fijos",fMXN0(P.GF),"a cubrir cada mes")}
+      ${hcard("Punto de equilibrio",P.PE==null?"—":fMXN0(P.PE),"en ventas mensuales")}
+    </div>
+    <div class="hero">
+      ${hcard("Utilidad de operación",P.utilOper==null?"—":fMXN0(P.utilOper),P.utilOper==null?"captura volúmenes":(P.utilOper>0?"la empresa gana":"pérdida"),P.utilOper==null?"g":(P.utilOper>0?"v":"r"))}
+      ${hcard("Margen de seguridad",P.margenSeg==null?"—":fPct(P.margenSeg),"qué tanto arriba del equilibrio",P.margenSeg==null?"g":(P.margenSeg>0?"v":"r"))}
+      ${hcard("Faltante para equilibrio",P.faltante==null?(P.conVol?"$0":"—"):fMXN0(P.faltante),P.faltante==null?(P.conVol?"equilibrio cubierto":"—"):"ventas adicionales necesarias",P.faltante==null?"v":"a")}
+      <div class="hcard ${estLuz}"><div class="bar"></div><div class="k">Estado financiero</div>
+        <div class="v" style="font-size:15px">${estTxt}</div></div>
+    </div>
+
+    <div class="exgrid">
+      <div class="card"><h3>Estado de resultados mensual</h3><div class="pad">${pnl}
+        <div class="note" style="margin-top:10px">Utilidad de operación antes de impuestos. No incluye ISR/IVA ni depreciación fuera de maquinaria.</div></div></div>
+      <div class="card"><h3>Punto de equilibrio</h3><div class="pad">${be}</div></div>
+      <div class="card full"><h3>Gráfica de equilibrio</h3><div class="chartbox tall"><canvas id="ch_breakeven"></canvas></div></div>
+      <div class="card full"><h3>Gastos fijos de operación (mensuales)</h3><div class="pad">${gf}</div></div>
+    </div>`;
+}
+function buildPresupuestoCharts(R){
+  if(typeof Chart==="undefined") return;
+  Chart.defaults.font.family="'IBM Plex Sans',sans-serif"; Chart.defaults.font.size=11; Chart.defaults.color="#5f6d7a";
+  const P=computePresupuesto(R);
+  if(!(P.ratio>0)||P.PE==null){ return; }
+  const xMax=Math.max(P.PE, P.ventas||0, P.meta||0)*1.4 || P.PE*1.4;
+  const line=(fn)=>[{x:0,y:fn(0)},{x:xMax,y:fn(xMax)}];
+  const datasets=[
+    {label:"Ingresos",data:line(x=>x),borderColor:PAL[0],backgroundColor:PAL[0],borderWidth:2,pointRadius:0,tension:0},
+    {label:"Costo total (fijo + variable)",data:line(x=>P.GF+(1-P.ratio)*x),borderColor:SEM.r,backgroundColor:SEM.r,borderWidth:2,pointRadius:0,tension:0},
+    {label:"Gastos fijos",data:line(x=>P.GF),borderColor:"#9aa3ab",borderDash:[5,4],borderWidth:1.5,pointRadius:0},
+    {label:"Punto de equilibrio",data:[{x:P.PE,y:P.PE}],type:"scatter",backgroundColor:"#16222e",pointRadius:6,pointHoverRadius:7}
+  ];
+  if(P.conVol) datasets.push({label:"Ventas actuales",data:[{x:P.ventas,y:P.ventas}],type:"scatter",backgroundColor:SEM.v,pointRadius:6,pointHoverRadius:7});
+  const money=v=>v>=1000?"$"+(v/1000).toLocaleString("es-MX",{maximumFractionDigits:0})+"k":"$"+v;
+  mkChart("ch_breakeven",{type:"line",data:{datasets},
+    options:{responsive:true,maintainAspectRatio:false,parsing:true,
+      scales:{x:{type:"linear",title:{display:true,text:"Ventas mensuales ($)"},ticks:{callback:money}},
+              y:{title:{display:true,text:"$ mensuales"},ticks:{callback:money}}},
+      plugins:{legend:{position:"bottom",labels:{boxWidth:12,padding:12}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fMXN0(c.parsed.y)}`,title:c=>"Ventas: "+fMXN0(c[0].parsed.x)}}}}});
+}
+
+/* ===================== RENDER ===================== */
+function renderSection(id){
+  destroyCharts();
+  const R=compute();
+  const map={dashboard:secDashboard,presupuesto:secPresupuesto,resumen:secResumen,control:secControl,capacidad:secCapacidad,mano:secMano,
+    indirectos:secIndirectos,energia:secEnergia,centros:secCentros,
+    ruta:secRuta,financiero:secFinanciero,integral:secIntegral,placas:secDiseno,diagrama:secDiagrama,validacion:secValidacion};
+  document.getElementById("content").innerHTML=(map[id]||secDashboard)(R);
+  if(id==="dashboard") buildDashboardCharts(R);
+  if(id==="presupuesto") buildPresupuestoCharts(R);
+}
+function renderAll(){renderNav();renderKPIs();renderChain();renderSection(current);}
+
+/* ===================== EXPORTACIÓN (Excel / PDF) ===================== */
+const r2=x=>x==null?null:Math.round(x*100)/100;
+const r4=x=>x==null?null:Math.round(x*10000)/10000;
+function toast(msg){
+  const t=document.getElementById('saveTxt'),d=document.getElementById('dot');
+  t.textContent=msg; d.style.background="var(--accent)";
+  clearTimeout(toast._t); toast._t=setTimeout(()=>{t.textContent="Guardado";d.style.background="var(--green)";},3500);
+}
+function askConfirm(msg,onYes,yesLabel){
+  const ov=document.createElement("div"); ov.className="modal-ov";
+  const m=document.createElement("div"); m.className="modal";
+  m.innerHTML=`<div class="modal-msg">${msg}</div><div class="modal-actions">
+    <button class="btn" type="button" data-no>Cancelar</button>
+    <button class="btn danger" type="button" data-yes>${yesLabel||"Eliminar"}</button></div>`;
+  ov.appendChild(m); document.body.appendChild(ov);
+  const close=()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener("keydown",onKey); };
+  const onKey=ev=>{ if(ev.key==="Escape") close(); };
+  m.querySelector("[data-no]").onclick=close;
+  m.querySelector("[data-yes]").onclick=()=>{ close(); onYes(); };
+  ov.onclick=e=>{ if(e.target===ov) close(); };
+  document.addEventListener("keydown",onKey);
+  m.querySelector("[data-yes]").focus();
+}
+async function saveFile(filename, data, mime){
+  // Vía oficial en página publicada: capacidad "downloads"
+  try{
+    const dl = (window.claude && window.claude.use) ? await window.claude.use("downloads") : null;
+    if(dl){
+      try{ await dl.save({filename, data}); toast("Descarga lista: "+filename); return; }
+      catch(err){
+        if(err && err.code==="declined") return;               // el usuario canceló
+        console.warn("downloads.save:",err);                    // otro error → intento respaldo
+      }
+    }
+  }catch(e){ console.warn(e); }
+  // Respaldo (HTML alojado por tu cuenta o vista previa)
+  try{
+    const blob = (data instanceof Blob) ? data : new Blob([data],{type:mime||"application/octet-stream"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+    toast("Descarga lista: "+filename);
+  }catch(e){ alert("Esta vista no permite descargar archivos. Ábrela desde el enlace del artefacto."); }
+}
+function buildWorkbook(){
+  const R=compute();
+  const wb=XLSX.utils.book_new();
+  const margenGlobal=(num(S.control.margenObj)+f("deltaMargen"));
+  const resumen=[
+    ["COSTEO FOAM INTEGRAL · NORTH FOAM"],
+    ["Generado", new Date().toLocaleString("es-MX")],
+    ["Escenario", S.control.escenario],
+    ["Tipo de cambio efectivo (MXN/USD)", r4(R.tc)],
+    ["Pool de manufactura (MXN/mes)", r2(R.pool)],
+    ["Tasa de planta (MXN/h)", R.tasaPlanta==null?"PENDIENTE":r2(R.tasaPlanta)],
+    ["Capacidad práctica (h/mes)", r2(R.capPractica)],
+    ["Margen objetivo global (%)", r2(margenGlobal*100)],
+    [],
+    ["VALIDACIÓN","Resultado","Estado"],
+    ...R.valid.map(v=>[v.k, v.v, v.rev?"REVISAR":"OK"])
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+
+  const P=computePresupuesto(R);
+  const per=(P.PE!=null&&P.ventas>0)?P.PE/P.ventas:null;
+  let est; if(!P.conVol) est="Captura volúmenes para la utilidad real";
+    else if(P.utilOper>0) est="La empresa genera utilidad de operación";
+    else if(Math.abs(P.utilOper)<1) est="En punto de equilibrio";
+    else est="Por debajo del punto de equilibrio";
+  const pre=[
+    ["PRESUPUESTO Y PUNTO DE EQUILIBRIO"],
+    ["Generado", new Date().toLocaleString("es-MX")],
+    ["Escenario", S.control.escenario],
+    ["Estado financiero", est],
+    [],
+    ["ESTADO DE RESULTADOS MENSUAL (MXN)"],
+    ["Ventas netas mensuales", r2(P.ventas)],
+    ["(-) Costo variable — material", r2(-P.matMes)],
+    ["= Margen de contribución", r2(P.contribMes)],
+    ["   Margen de contribución %", r2(P.ratio*100)],
+    ["(-) Gastos fijos de operación", r2(-P.GF)],
+    ["= Utilidad (pérdida) de operación", P.utilOper==null?"— (captura volúmenes)":r2(P.utilOper)],
+    [],
+    ["GASTOS FIJOS DE OPERACIÓN (MXN/mes)"],
+    ["Manufactura (energía, MO directa, maquinaria, indirectos fabriles)", r2(P.gfManuf)],
+    ["Administración (nómina + indirectos)", r2(P.gfAdmin)],
+    ["Comercial (nómina + indirectos)", r2(P.gfComer)],
+    ["Logística", r2(P.gfLog)],
+    ["Financiero (gastos fijos)", r2(P.gfFin)],
+    ["Otros gastos fijos", r2(P.otros)],
+    ["Total gastos fijos mensuales", r2(P.GF)],
+    [],
+    ["PUNTO DE EQUILIBRIO"],
+    ["Punto de equilibrio (ventas $/mes)", P.PE==null?"—":r2(P.PE)],
+    ["Margen de contribución usado %", r2(P.ratio*100)],
+    ["   Base del margen", P.conVol?"ponderado por mezcla real":"promedio (sin volumen)"],
+    ["Equilibrio como % de ventas actuales", per==null?"—":r2(per*100)],
+    ["Margen de seguridad %", P.margenSeg==null?"—":r2(P.margenSeg*100)],
+    ["Faltante para el equilibrio", P.faltante==null?(P.conVol?0:"—"):r2(P.faltante)],
+    ["Meta de ventas mensual", P.meta==null?"—":r2(P.meta)],
+    ["Meta vs. equilibrio", (P.meta!=null&&P.PE!=null)?r2(P.meta-P.PE):"—"]
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pre), "Presupuesto");
+
+  const H=["Inserto","Material USD","% Merma mat.","Material MXN","MO","Máquina","Indirectos",
+    "Costo manufactura","Admin","Comercial","Logística","Financiamiento","Garantías","Costo integral",
+    "Margen obj. %","Precio sugerido","Precio cliente USD","Precio cliente MXN","Utilidad/pza",
+    "Margen real %","Markup %","Estado"];
+  const body=R.integral.map(i=>[i.ins.id, r4(i.materialUSD), r2(i.mermaMat*100), r2(i.materialMXN),
+    r2(i.mo), r2(i.maq), r2(i.ind), r2(i.costoManuf), r2(i.admin), r2(i.comercial), r2(i.logistica),
+    r2(i.financiamiento), r2(i.garantiaMXN), r2(i.costoIntegral), r2(i.margenObj*100),
+    i.precioSug==null?"INCOMPLETO":r2(i.precioSug), r2(i.precioClUSD), r2(i.precioClMXN),
+    i.utilidad==null?"":r2(i.utilidad), i.margenReal==null?"":r2(i.margenReal*100),
+    i.markup==null?"":r2(i.markup*100), i.estado]);
+  const wsI=XLSX.utils.aoa_to_sheet([H,...body]); wsI["!freeze"]={xSplit:1,ySplit:1};
+  XLSX.utils.book_append_sheet(wb, wsI, "Costeo integral");
+
+  const CH=["Centro de costo","Tarifa MO $/h","Tarifa indirectos $/h","Tarifa TOTAL $/h"];
+  const crows=R.centros.map(c=>[c.c, r2(c.moRate), r2(c.indRate), r2(c.total)]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CH,...crows]), "Centros de costo");
+
+  const PH=["Concepto","MXN/mes"];
+  const pool=[PH,["Energía eléctrica",r2(R.energiaSubtotal)],["Mano de obra directa",r2(R.moDirecta)],
+    ["Maquinaria (deprec.+mant.)",r2(R.maqTotal)],["Indirectos fabriles",r2(R.indFabril)],
+    ["TOTAL POOL",r2(R.pool)],[],["Capacidad práctica (h/mes)",r2(R.capPractica)],
+    ["Tasa de planta (MXN/h)",R.tasaPlanta==null?"PENDIENTE":r2(R.tasaPlanta)]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pool), "Pool");
+
+  const RH=["Inserto","Op","Proceso","Centro","Min prep/lote","Lote","Min MO/u","Min máq/u","N° op.",
+    "% retrab.","% merma","Costo total/u","Estado"];
+  const rrows=R.rutaCalc.filter(r=>r.ins).map(r=>[r.ins,r.op,r.proc,r.ce,
+    r.prep,r.lote,r.minMO,r.minMaq,r.nop,r2(num(r.retrab)*100),r2(num(r.merma)*100),
+    r.totU==null?"":r2(r.totU), r.estado]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([RH,...rrows]), "Ruta de proceso");
+
+  const PDH=["Inserto","Componente","Mat.","Medida 1 in","Medida 2 in","Grosor in","Cant./inserto","Pzas/placa","Aprov. %","Costo unit USD","Costo inserto USD"];
+  const prow=[];
+  S.inserts.forEach(ins=>{ const d=disenoCalc(ins); if(d) d.piezas.forEach(p=>prow.push([ins.id,p.comp,p.mat,p.m1,p.m2,p.grosor,p.cant,p.ppp,r2(p.aprov*100),r4(p.costoUnit),r2(p.costoInserto)])); });
+  if(prow.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([PDH,...prow]), "Costeo de placas");
+
+  // Requerimiento de material por cantidad terminada
+  const rqP=[["Inserto","Cantidad deseada","Componente","Material","Pzas/inserto","Piezas totales","Pzas/placa","Placas (teórico)","Placas a cortar"]];
+  const rqM=[["Inserto","Cantidad deseada","Material","Placas (teórico)","Placas a comprar","Precio placa USD","Costo teórico USD","Costo placas USD","Costo teórico MXN","Costo placas MXN"]];
+  S.inserts.forEach(ins=>{
+    const d=disenoCalc(ins); if(!d) return;
+    const Q=num(ins.diseno&&ins.diseno.qDeseada); if(!(Q>0)) return;
+    d.piezas.forEach(p=>{
+      const tot=num(p.cant)*Q, frac=p.ppp>0?tot/p.ppp:0, placas=Math.ceil(frac-1e-9);
+      rqP.push([ins.id,Q,p.comp,"M"+(p.mat||1),num(p.cant),tot,p.ppp,r2(frac),placas]);
+    });
+    [0,1,2].forEach(k=>{
+      const eff=d.mats[k]||{}; const rows=d.piezas.filter(p=>(num(p.mat)||1)-1===k);
+      if(!rows.length||!(eff.precio>0)) return;
+      const frac=rows.reduce((a,p)=>a+(p.ppp>0?(num(p.cant)*Q)/p.ppp:0),0);
+      const comprar=Math.ceil(frac-1e-9);
+      const costoTeo=rows.reduce((a,p)=>a+p.costoInserto,0)*Q, costoPl=comprar*eff.precio;
+      rqM.push([ins.id,Q,eff.nombre||("M"+(k+1)),r2(frac),comprar,r4(eff.precio),r2(costoTeo),r2(costoPl),r2(costoTeo*R.tc),r2(costoPl*R.tc)]);
+    });
+  });
+  if(rqP.length>1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rqP), "Req. piezas a cortar");
+  if(rqM.length>1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rqM), "Req. material y costo");
+
+  const rqU=[["Inserto","Cantidad deseada","Ingreso total MXN","Costo integral total MXN","Utilidad total MXN","Contribución total (sin ruta) MXN","Estado"]];
+  S.inserts.forEach(ins=>{
+    const d=disenoCalc(ins); if(!d) return;
+    const Q=num(ins.diseno&&ins.diseno.qDeseada); if(!(Q>0)) return;
+    const it=R.integral.find(x=>String(x.ins.id)===String(ins.id))||{};
+    const ing=num(it.precioClMXN)*Q, comp=!!it.complete;
+    rqU.push([ins.id,Q,r2(ing), comp?r2(num(it.costoIntegral)*Q):"—", comp?r2(num(it.utilidad)*Q):"—",
+      comp?"—":r2((num(it.precioClMXN)-num(it.materialMXN))*Q), comp?"Completo":"Sin ruta (contribución)"]);
+  });
+  if(rqU.length>1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rqU), "Req. utilidad orden");
+
+  // Diagrama de corte (datos por pieza) y nesting combinado
+  const dcH=["Inserto","Componente","Material","Med. 1 in","Med. 2 in","Orientación","Cols","Filas","Piezas/placa","Aprovechamiento %","Merma %"];
+  const dc=[dcH]; const ncH=["Inserto","Material","Piezas/placa (combinado)","Aprovechamiento combinado %","Merma combinada %","Aprov. por separado %","Mejora %"]; const nc=[ncH];
+  S.inserts.forEach(ins=>{
+    const dz=disenoCalc(ins); if(!dz||!dz.piezas.length) return;
+    dz.piezas.forEach(p=>{
+      const mat=dz.mats[(num(p.mat)||1)-1]||{}; const d=cutCalc(p,mat); if(!d) return;
+      dc.push([ins.id,p.comp,mat.nombre||("M"+(p.mat||1)),num(p.m1),num(p.m2),d.useO2?"Rotada 90°":"Normal",d.cols,d.rows,d.ppp,r2(d.aprov*100),r2((1-d.aprov)*100)]);
+    });
+    [0,1,2].forEach(k=>{
+      const mat=dz.mats[k]||{}; const ps=dz.piezas.filter(p=>(num(p.mat)||1)-1===k && num(p.m1)>0 && num(p.m2)>0);
+      if(ps.length<2||!(num(mat.largo)>0&&num(mat.ancho)>0)) return;
+      const types=ps.map(p=>({comp:p.comp,color:"",w:Math.max(num(p.m1),num(p.m2)),h:Math.min(num(p.m1),num(p.m2)),cant:num(p.cant)||1}));
+      const res=fillPlateMixed(types,num(mat.largo),num(mat.ancho));
+      const ind=ps.reduce((a,p)=>{const d=cutCalc(p,mat);return a+(d?d.aprov:0);},0)/ps.length;
+      nc.push([ins.id,mat.nombre||("M"+(k+1)),res.total,r2(res.aprov*100),r2((1-res.aprov)*100),r2(ind*100),r2((res.aprov-ind)*100)]);
+    });
+  });
+  if(dc.length>1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dc), "Diagrama corte");
+  if(nc.length>1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(nc), "Nesting combinado");
+  return wb;
+}
+
+/* ===================== APP API ===================== */
+const app={
+  go(id){current=id;renderNav();renderSection(id);document.querySelector(".content").scrollIntoView({block:"start"});window.scrollTo(0,0);},
+  addInsert(){ const id=nextInsId(); S.inserts.push({id,q25:null,q26:null}); S.ruta.push(...stdRutaOps(id)); sortInserts(); save(); renderKPIs(); renderChain(); renderSection("integral"); },
+  addInserts(n){ for(let k=0;k<n;k++){ const id=nextInsId(); S.inserts.push({id,q25:null,q26:null}); S.ruta.push(...stdRutaOps(id)); } sortInserts(); save(); renderKPIs(); renderChain(); renderSection("integral"); toast(n+" insertos agregados"); },
+  rutasEstandar(){
+    S.inserts.forEach(ins=>{ const id=String(ins.id);
+      if(!S.ruta.some(r=>String(r.ins)===id&&r.proc===CENTRO_PROD)) S.ruta.push(stdRutaOps(id)[0]);
+    });
+    save(); renderKPIs(); renderChain(); renderSection("ruta"); toast("Ruta estándar aplicada a todos los insertos");
+  },
+  delInsert(i){
+    const id=String(S.inserts[i].id==null?"":S.inserts[i].id);
+    askConfirm("¿Eliminar el inserto <b>"+(id||"(sin número)")+"</b>? Se quitará también su volumen, su ruta y su costeo de placas. Esta acción no se puede deshacer.", ()=>{
+      S.inserts.splice(i,1);
+      if(id){ delete S.perInsert[id]; S.ruta=S.ruta.filter(r=>String(r.ins)!==id); if(String(disenoSel)===id) disenoSel=null; }
+      save(); renderKPIs(); renderChain(); renderSection(current); toast("Inserto "+(id||"")+" eliminado");
+    }, "Eliminar inserto");
+  },
+  setDiseno(id){ disenoSel=String(id); renderSection("placas"); },
+  setDiagrama(id){ disenoSel=String(id); renderSection("diagrama"); },
+  addNamedInsert(){
+    const el=document.getElementById("newInsId"); const v=(el?el.value:"").trim();
+    if(!v){ toast("Escribe el número del nuevo inserto"); if(el)el.focus(); return; }
+    if(S.inserts.some(x=>String(x.id)===v)){
+      toast("Ya existe el inserto "+v+"; lo abrí");
+      disenoSel=v; renderSection("placas"); return;
+    }
+    S.inserts.push({id:v,q25:null,q26:null,diseno:{materiales:[{},{},{}],piezas:[]}});
+    S.ruta.push(...stdRutaOps(v));
+    sortInserts();
+    disenoSel=v; save(); renderKPIs(); renderChain(); renderSection("placas"); toast("Inserto "+v+" creado");
+  },
+  addPieza(idx){ ensureDiseno(S.inserts[idx]); S.inserts[idx].diseno.piezas.push({comp:"Tapa / Base",m1:null,m2:null,grosor:null,mat:1,cant:1,piezasManual:null}); save(); renderKPIs(); renderChain(); renderSection("placas"); },
+  delPieza(idx,j){ S.inserts[idx].diseno.piezas.splice(j,1); save(); renderKPIs(); renderChain(); renderSection("placas"); },
+  addMaterial(){ if(!S.catalogo)S.catalogo=[]; S.catalogo.push({nombre:"NUEVO material",grosor:null,ancho:null,largo:null,costo:null}); save(); renderSection("placas"); },
+  delMaterial(k){ S.catalogo.splice(k,1); save(); renderKPIs(); renderChain(); renderSection("placas"); },
+  setEscenario(s){S.control.escenario=s;save();renderKPIs();renderChain();renderSection(current);},
+  aplicarEscenarios(){ S.escenarios=clone(DEFAULTS.escenarios); save(); renderKPIs(); renderChain(); renderSection("control"); toast("Escenarios de North Foam aplicados"); },
+  setTcOficial(v){ S.control.tcBase=v; S.control.tcFecha=new Date().toLocaleDateString("es-MX"); save(); renderKPIs(); renderChain(); renderSection("control"); toast("TC base actualizado a "+v); },
+  setSensMetric(m){sensMetric=m;renderSection("dashboard");},
+  setRutaFilter(v){rutaFilter=v;renderSection("ruta");},
+  addEmp(){S.empleados.push({puesto:"Nuevo puesto",tipo:"Directa",centro:"Corte",period:"Semanal",sueldo:null,n:1,uniformes:0,capacitacion:0,ausent:0});save();renderSection("mano");},
+  addMaq(){S.maquinaria.push({equipo:"Nuevo equipo",centro:"Otros",adquisicion:null,vida:null,residual:0,mantenimiento:null,refacciones:null,seguro:null});save();renderSection("maquinaria");},
+  addInd(){S.indirectos.push({c:"Nuevo concepto",cl:"Indirecto fijo",ce:"Otros",m:null});save();renderSection("indirectos");},
+  addCarga(){S.energia.cargas.push({n:"Nueva carga",kw:0,h:0});save();renderSection("energia");},
+  addRuta(){S.ruta.push({ins:S.inserts[0].id,op:20,proc:"Corte",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0});save();renderSection("ruta");},
+  delRow(path,i){
+    const parts=path.split(".");let o=S;for(const p of parts)o=o[p];
+    o.splice(i,1);save();renderKPIs();renderChain();renderSection(current);
+  },
+  reset(){ askConfirm("¿Restablecer todos los datos a los valores originales del modelo? Se perderá lo capturado en este navegador.", ()=>{ S=clone(DEFAULTS); save(); renderAll(); }, "Restablecer"); },
+  exportJSON(){
+    saveFile("costeo-foam-datos.json", JSON.stringify(S,null,2), "application/json");
+  },
+  exportExcel(){
+    if(typeof XLSX==="undefined"){alert("No se pudo cargar la librería de Excel. Revisa tu conexión e inténtalo de nuevo.");return;}
+    try{
+      const wb=buildWorkbook();
+      const ab=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+      const blob=new Blob([ab],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      saveFile("Costeo_FOAM_Integral.xlsx", blob);
+    }catch(e){console.error(e);alert("No se pudo generar el Excel.");}
+  },
+  exportPDF(){
+    if(!window.jspdf||!window.jspdf.jsPDF){alert("No se pudo cargar la librería de PDF. Revisa tu conexión e inténtalo de nuevo.");return;}
+    try{
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:"landscape",unit:"pt",format:"a4"});
+      const R=compute();
+      doc.setFont("helvetica","bold");doc.setFontSize(15);doc.setTextColor(22,34,46);
+      doc.text("Costeo FOAM Integral · North Foam",40,42);
+      try{ const ls=document.getElementById('brandLogo'); if(ls&&ls.src) doc.addImage(ls.src,'PNG',742,20,80,62); }catch(e){}
+      doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(80,90,100);
+      const meta=`Generado: ${new Date().toLocaleString("es-MX")}    Escenario: ${S.control.escenario}    `+
+        `TC efectivo: ${fN(R.tc,4)}    Pool: ${fMXN0(R.pool)}/mes    `+
+        `Tasa planta: ${R.tasaPlanta==null?"—":fMXN(R.tasaPlanta)+"/h"}    Capacidad: ${fN(R.capPractica,0)} h/mes`;
+      doc.text(meta,40,60);
+      const head=[["Inserto","Material MXN","Conversión","Costo integral","Precio sugerido",
+        "Precio cliente","Utilidad/pza","Margen real","Markup","Estado"]];
+      const body=R.integral.map(i=>[i.ins.id, fMXN(i.materialMXN), i.conversion?fMXN(i.conversion):"s/ruta",
+        fMXN(i.costoIntegral), i.precioSug==null?"INCOMPLETO":fMXN(i.precioSug), fMXN(i.precioClMXN),
+        i.utilidad==null?"—":fMXN(i.utilidad), i.margenReal==null?"—":fPct(i.margenReal),
+        i.markup==null?"—":fPct(i.markup), estadoCorto(i.estado)]);
+      const luces=R.integral.map(i=>i.luz);
+      const color={v:[230,245,236],a:[251,241,216],r:[251,230,233],g:[236,239,241]};
+      doc.autoTable({head,body,startY:78,
+        styles:{font:"helvetica",fontSize:8,cellPadding:4,lineColor:[221,227,232],lineWidth:.5,textColor:[24,36,48]},
+        headStyles:{fillColor:[30,48,64],textColor:255,halign:"right",fontStyle:"bold"},
+        columnStyles:{0:{halign:"left",fontStyle:"bold"},9:{halign:"left"}},
+        bodyStyles:{halign:"right"},
+        didParseCell:function(d){ if(d.section==="body"){const l=luces[d.row.index]; if(l&&color[l]) d.cell.styles.fillColor=color[l];} }
+      });
+      let y=(doc.lastAutoTable?doc.lastAutoTable.finalY:78)+18;
+      doc.setFontSize(8);doc.setTextColor(90,100,110);
+      doc.text("Margen sobre venta = utilidad ÷ precio.  Markup = utilidad ÷ costo.  Precio sugerido = costo integral ÷ (1 − margen objetivo).",40,y,{maxWidth:760});
+      doc.text("Sin tiempos de ruta el inserto queda como costeo incompleto y no genera precio válido. Verde: cumple objetivo · Amarillo: bajo objetivo · Rojo: margen negativo · Gris: incompleto.",40,y+13,{maxWidth:760});
+      // Página de optimización de corte
+      const cutBody=[];
+      S.inserts.forEach(ins=>{ const dz=disenoCalc(ins); if(!dz||!dz.piezas.length) return;
+        dz.piezas.forEach(p=>{ const mat=dz.mats[(num(p.mat)||1)-1]||{}; const d=cutCalc(p,mat); if(!d) return;
+          cutBody.push([ins.id,p.comp,mat.nombre||("M"+(p.mat||1)),fN(num(p.m1),2)+" × "+fN(num(p.m2),2),d.useO2?"Rotada":"Normal",String(d.ppp),fPct(d.aprov),fPct(1-d.aprov)]);
+        });
+      });
+      if(cutBody.length){
+        doc.addPage();
+        doc.setFont("helvetica","bold");doc.setFontSize(13);doc.setTextColor(22,34,46);
+        doc.text("Optimización de corte — aprovechamiento y merma",40,42);
+        doc.autoTable({head:[["Inserto","Componente","Material","Pieza (in)","Orientación","Pzas/placa","Aprovech.","Merma"]],body:cutBody,startY:60,
+          styles:{font:"helvetica",fontSize:8,cellPadding:4,lineColor:[221,227,232],lineWidth:.5},
+          headStyles:{fillColor:[30,48,64],textColor:255,fontStyle:"bold"},
+          columnStyles:{0:{halign:"left",fontStyle:"bold"},1:{halign:"left"},2:{halign:"left"},4:{halign:"left"}}});
+      }
+      const blob=doc.output("blob");
+      saveFile("Costeo_FOAM_Integral.pdf", blob);
+    }catch(e){console.error(e);alert("No se pudo generar el PDF.");}
+  },
+  importJSON(ev){
+    const file=ev.target.files[0];if(!file)return;
+    const r=new FileReader();
+    r.onload=()=>{try{const p=JSON.parse(r.result);S=Object.assign(clone(DEFAULTS),p);save();renderAll();}
+      catch(e){alert("No se pudo leer el archivo. ¿Es un respaldo válido?");}};
+    r.readAsText(file);ev.target.value="";
+  }
+};
+/* boolean select para financiero.activar */
+document.addEventListener("change",e=>{
+  const el=e.target;if(!el.dataset||el.dataset.type!=="bool")return;
+  setPath(el.dataset.path, el.value==="true");save();renderKPIs();renderChain();renderSection(current);
+});
+
+renderAll();
+// Si Chart.js aún no cargaba en el primer render, reconstruye el panel al terminar de cargar.
+window.addEventListener("load",()=>{ if(current==="dashboard"||current==="presupuesto") renderSection(current); });
+</script>
+</body>
+</html>

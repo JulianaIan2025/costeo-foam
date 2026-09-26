@@ -249,7 +249,7 @@ const COMPONENTES=["Tapa / Base","Tapa","Base","Frente / Atrás","Lateral","Divi
 const TC_OFICIAL=16.9710, TC_OFICIAL_FECHA="11-sep-2026";
 
 const DEFAULTS={
-  control:{escenario:"Base", tcBase:16.9710, margenObj:0.35, vigenciaMeses:3, tcFecha:null},
+  control:{escenario:"Base", tcBase:16.9710, margenObj:0.35, vigenciaMeses:3, tcFecha:null, tcAuto:true, tcSerie:"fix"},
   escenarios:{ // factores por escenario — valores North Foam
     tc:{Base:1,Conservador:1.05,"Estrés":1.135},
     materiales:{Base:1,Conservador:1.05,"Estrés":1.15},
@@ -311,7 +311,7 @@ const DEFAULTS={
   ],
   energia:{precio:4.0,cargoFijo:100,demandaKW:0,cargoDemanda:0,reciboReal:null,
     cargas:[
-      {n:"Máquina de corte (220 V)",kw:2.3,h:150},
+      {n:"Equipo de corte (220 V)",kw:2.3,h:150},
       {n:"Clima / aire (nave)",kw:10,h:200},
       {n:"Iluminación de nave",kw:2,h:234},
       {n:"Equipo de cómputo / oficina",kw:1,h:234}
@@ -507,7 +507,7 @@ function compute(){
   // Ruta por operación
   R.rutaCalc=S.ruta.map(r=>{
     const ct=centro(r.ce);
-    const ok = isNum(r.prep)&&isNum(r.minMO)&&isNum(r.minMaq)&&isNum(r.lote)&&num(r.lote)>0;
+    const ok = isNum(r.prep)&&isNum(r.minMO)&&isNum(r.lote)&&num(r.lote)>0;
     if(!ok) return {...r,prepU:null,moU:null,maqU:null,indU:null,totU:null,estado:(r.ins?"PENDIENTE":"")};
     const rtb=num(r.retrab)*f("retrabajo");
     const mrm=Math.min(0.95,num(r.merma)*f("rechazo"));
@@ -515,8 +515,8 @@ function compute(){
     const tcf=f("tiempoCiclo"), tpf=f("tiempoPrep");
     const prepU=(num(r.prep)*tpf/num(r.lote))*(ct.moRate+ct.maqRate+ct.indRate)/60;
     const moU=num(r.minMO)*tcf*num(r.nop)*ct.moRate/60*up;
-    const maqU=num(r.minMaq)*tcf*ct.maqRate/60*up;
-    const indU=(num(r.minMO)*tcf*num(r.nop)+num(r.minMaq)*tcf)/60*ct.indRate*up;
+    const maqU=0;
+    const indU=(num(r.minMO)*tcf*num(r.nop))/60*ct.indRate*up;
     return {...r,prepU,moU,maqU,indU,totU:prepU+moU+maqU+indU,estado:"OK"};
   });
   const agg=id=>{
@@ -800,7 +800,7 @@ function secResumen(R){
       <span><span class="sw" style="background:var(--gray)"></span><b>Gris</b> costeo incompleto</span>
     </div>
     <div class="grid2" style="margin-top:16px">
-      ${cardMini("Cómo se conecta","Escenario y TC → material en MXN. Capacidad + nómina + maquinaria + indirectos + energía → <b>pool</b> → <b>tasa de planta</b> → tarifas por <b>centro</b>. Los tiempos de <b>ruta</b> por inserto consumen esas tarifas → conversión → costo integral → precio y margen. Edita un dato en cualquier hoja y todo se actualiza aquí.")}
+      ${cardMini("Cómo se conecta","Escenario y TC → material en MXN. Capacidad + nómina + indirectos + energía → <b>pool</b> → <b>tasa de planta</b> → tarifas por <b>centro</b>. Los tiempos de <b>ruta</b> por inserto consumen esas tarifas → conversión → costo integral → precio y margen. Edita un dato en cualquier hoja y todo se actualiza aquí.")}
       ${cardValidResumen(R)}
     </div>`;
 }
@@ -820,7 +820,7 @@ function secControl(R){
     ["energia","Energía eléctrica","x"],["nomina","Nómina y carga patronal","x"],
     ["flete","Flete (entrada/cliente)","x"],["tiempoCiclo","Tiempo de ciclo por pieza","x"],
     ["tiempoPrep","Tiempo de preparación","x"],["retrabajo","Retrabajo","x"],
-    ["rechazo","Rechazo definitivo","x"],["mantenimiento","Mantenimiento y refacciones","x"],
+    ["rechazo","Rechazo definitivo","x"],
     ["consumibles","Consumibles y adhesivos","x"],["garantias","Garantías/devoluciones","x"],
     ["precioVenta","Precio de venta","x"],["financiero","Costo financiero","x"],
     ["deltaMargen","Delta de margen objetivo","p.p."]
@@ -846,13 +846,26 @@ function secControl(R){
         <tr><td class="l">Vigencia de precios <span class="unit">meses</span></td><td>${inp("control.vigenciaMeses")}</td></tr>
       </table>
       <div class="note" style="margin-top:12px">
-        <b>Tipo de cambio oficial.</b> Esta vista no consulta Banxico/DOF en vivo (el entorno publicado no permite llamadas de red externas), pero mantén el TC al día desde la fuente oficial:
+        <b>Tipo de cambio automático.</b> La app consulta cada vez que se abre el tipo de cambio oficial del <b>Banco de México</b> (SIE) y lo aplica sola, sin captura manual.
+        <table style="margin:8px 0">
+          <tr><td class="l">Actualización automática</td><td class="l">
+            <select class="f" data-path="control.tcAuto" data-type="bool">
+              <option value="true" ${S.control.tcAuto!==false?'selected':''}>Activada</option>
+              <option value="false" ${S.control.tcAuto===false?'selected':''}>Desactivada (captura manual)</option>
+            </select></td></tr>
+          <tr><td class="l">Serie oficial a usar</td><td class="l">
+            <select class="f" data-path="control.tcSerie" data-type="text">
+              <option value="fix" ${S.control.tcSerie!=="pagos"?'selected':''}>FIX / publicación DOF (SF43718)</option>
+              <option value="pagos" ${S.control.tcSerie==="pagos"?'selected':''}>Para solventar obligaciones (SF60653)</option>
+            </select></td></tr>
+          <tr><td class="l">Último dato recibido</td><td class="mono val-calc">${TC_API?((TC_API.fix?('FIX '+fN(TC_API.fix.valor,4)+' · '+TC_API.fix.fecha):'')+(TC_API.pagos?('  |  Pagos '+fN(TC_API.pagos.valor,4)+' · '+TC_API.pagos.fecha):'')):'<span class="val-pend">sin conexión al servicio</span>'}</td></tr>
+        </table>
         <div style="margin:8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="rowbtn" style="margin:0" onclick="app.setTcOficial(${TC_OFICIAL})">Aplicar FIX ${fN(TC_OFICIAL,4)} (${TC_OFICIAL_FECHA})</button>
-          <a class="btn" style="display:inline-block" href="https://www.banxico.org.mx/portal-mercado-cambiario/" target="_blank" rel="noopener">Banxico FIX ↗</a>
+          <button class="rowbtn" style="margin:0" onclick="app.refrescarTC()">Actualizar ahora</button>
+          <a class="btn" style="display:inline-block" href="https://www.banxico.org.mx/tipcamb/tipCamMIBOW.jsp" target="_blank" rel="noopener">Banxico ↗</a>
           <a class="btn" style="display:inline-block" href="https://dof.gob.mx/indicadores.php" target="_blank" rel="noopener">DOF ↗</a>
         </div>
-        Banxico determina el FIX cada día hábil (~12:30 h) y el DOF lo publica al día hábil siguiente. Para obligaciones y facturación en dólares, el oficial es el del DOF (el FIX del día hábil anterior). El valor del botón es el último confirmado; verifica el del día en los enlaces.
+        Banxico determina el FIX cada día hábil (~12:00 h) y el DOF lo publica al día hábil siguiente: el FIX de hoy es la publicación DOF de mañana. Si el servicio no responde, se conserva el último valor y puedes capturarlo a mano arriba.
       </div>
       <div class="note" style="margin-top:8px">Margen sobre venta = utilidad ÷ precio. Markup = utilidad ÷ costo. Precio con margen objetivo = costo integral ÷ (1 − margen).</div>
     </div></div>
@@ -932,31 +945,6 @@ function secMano(R){
     <button class="rowbtn" onclick="app.addEmp()">+ Agregar puesto</button></div></div>`;
 }
 
-/* ---------- MAQUINARIA ---------- */
-function secMaquinaria(R){
-  const rows=R.maq.map((m,i)=>`<tr>
-    <td class="l">${inp(`maquinaria.${i}.equipo`,{type:"text",cls:"txt wide"})}</td>
-    <td class="l">${sel(`maquinaria.${i}.centro`,CENTROS)}</td>
-    <td>${inp(`maquinaria.${i}.adquisicion`,{ph:"PEND"})}</td>
-    <td>${inp(`maquinaria.${i}.vida`,{ph:"años"})}</td>
-    <td>${inp(`maquinaria.${i}.residual`)}</td>
-    <td>${inp(`maquinaria.${i}.mantenimiento`,{ph:"—"})}</td>
-    <td>${inp(`maquinaria.${i}.refacciones`,{ph:"—"})}</td>
-    <td>${inp(`maquinaria.${i}.seguro`,{ph:"—"})}</td>
-    <td class="mono val-calc">${fMXN0(m.dep)}</td>
-    <td class="mono val-calc">${fMXN0(m.costo)}</td>
-    <td class="mono val-calc">${m.tarifa==null?'—':fMXN(m.tarifa)+'/h'}</td>
-    <td><button class="del" onclick="app.delRow('maquinaria',${i})">✕</button></td></tr>`).join("");
-  return head("Maquinaria","MAQUINARIA",
-    "Depreciación mensual = (adquisición − residual) ÷ (vida × 12). El costo de máquina que entra al pool = depreciación + mantenimiento + refacciones + seguro. Captura los valores en amarillo para activar la depreciación.")
-  +`<div class="scroll"><table><thead><tr>
-    <th class="l">Equipo</th><th class="l">Centro</th><th>Adquisición</th><th>Vida (años)</th><th>Residual</th>
-    <th>Mant./mes</th><th>Refacc./mes</th><th>Seguro/mes</th><th>Deprec./mes</th><th>Costo máq./mes</th><th>Tarifa $/h</th><th></th>
-    </tr></thead><tbody>${rows}
-    <tr class="total"><td class="l" colspan="9">Total maquinaria → pool</td><td class="mono">${fMXN(R.maqTotal)}</td><td colspan="2"></td></tr>
-    </tbody></table></div>
-    <button class="rowbtn" onclick="app.addMaq()">+ Agregar equipo</button>`;
-}
 
 /* ---------- INDIRECTOS ---------- */
 function secIndirectos(R){
@@ -998,7 +986,7 @@ function secEnergia(R){
     <td class="mono val-calc">${fN(num(c.kw)*num(c.h),0)}</td>
     <td><button class="del" onclick="app.delRow('energia.cargas',${i})">✕</button></td></tr>`).join("");
   return head("Energía y pool de manufactura","COSTEO_MANUFACTURA",
-    "Tarifa comercial de baja tensión (PDBT): sólo cargo por consumo ($/kWh) + cargo fijo, sin cargo por demanda (eso aplica a media tensión con subestación). La base principal debe ser el recibo real de CFE; la estimación por potencia×horas es sólo validación. El pool reúne energía + MO directa + maquinaria + indirectos fabriles y define la tasa de planta.")
+    "Tarifa comercial de baja tensión (PDBT): sólo cargo por consumo ($/kWh) + cargo fijo, sin cargo por demanda (eso aplica a media tensión con subestación). La base principal debe ser el recibo real de CFE; la estimación por potencia×horas es sólo validación. El pool reúne energía + MO directa + indirectos fabriles y define la tasa de planta.")
   +`<div class="grid2">
     <div class="card"><h3>Parámetros de energía · CFE tarifa comercial baja tensión (PDBT)</h3><div class="pad"><table>
       <tr><td class="l">Precio de energía (tarifa comercial PDBT)</td><td>${inp("energia.precio")}<span class="unit">$/kWh</span></td></tr>
@@ -1020,7 +1008,6 @@ function secEnergia(R){
   <div class="card" style="margin-top:16px"><h3>Pool de manufactura y tasa de planta</h3><div class="pad"><table>
     <tr><td class="l">Energía eléctrica</td><td class="mono val-link">${fMXN(R.energiaSubtotal)}</td></tr>
     <tr><td class="l">Mano de obra directa</td><td class="mono val-link">${fMXN(R.moDirecta)}</td></tr>
-    <tr><td class="l">Maquinaria (deprec. + mantenimiento)</td><td class="mono val-link">${fMXN(R.maqTotal)}</td></tr>
     <tr><td class="l">Indirectos fabriles</td><td class="mono val-link">${fMXN(R.indFabril)}</td></tr>
     <tr class="total"><td class="l">Total pool de manufactura</td><td class="mono">${fMXN(R.pool)}</td></tr>
     <tr><td class="l">Capacidad práctica</td><td class="mono val-link">${fN(R.capPractica,0)} h/mes</td></tr>
@@ -1055,7 +1042,6 @@ function secRuta(R){
     <td>${inp(`ruta.${i}.prep`,{ph:"PEND"})}</td>
     <td>${inp(`ruta.${i}.lote`)}</td>
     <td>${inp(`ruta.${i}.minMO`,{ph:"PEND"})}</td>
-    <td>${inp(`ruta.${i}.minMaq`,{ph:"PEND"})}</td>
     <td>${inp(`ruta.${i}.nop`)}</td>
     <td>${inp(`ruta.${i}.retrab`,{pct:true})}</td>
     <td>${inp(`ruta.${i}.merma`,{pct:true})}</td>
@@ -1068,7 +1054,7 @@ function secRuta(R){
     <select class="f" onchange="app.setRutaFilter(this.value)">${insOpts.map(o=>`<option ${o===rutaFilter?'selected':''}>${o}</option>`).join("")}</select></div>
     <div class="scroll"><table><thead><tr>
     <th class="l">Inserto</th><th>Op</th><th class="l">Proceso</th><th class="l">Centro</th><th>Min prep/lote</th><th>Lote</th>
-    <th>Min MO/u</th><th>Min máq/u</th><th>N° op.</th><th>% retrab.</th><th>% merma</th><th>Costo total/u</th><th class="l">Estado</th><th></th>
+    <th>Min MO/u</th><th>N° op.</th><th>% retrab.</th><th>% merma</th><th>Costo total/u</th><th class="l">Estado</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
     <button class="rowbtn" onclick="app.addRuta()">+ Agregar operación</button>
     <button class="rowbtn" onclick="app.rutasEstandar()">Aplicar ruta estándar (Corte/Pegado/Ensamble) a todos</button>`;
@@ -1112,7 +1098,6 @@ function secIntegral(R){
       <td>${inpPer(id,"mermaMat",true)}</td>
       <td class="mono val-calc">${fMXN(it.materialMXN)}</td>
       <td class="mono val-calc">${it.mo?fMXN(it.mo):'—'}</td>
-      <td class="mono val-calc">${it.maq?fMXN(it.maq):'—'}</td>
       <td class="mono val-calc">${it.ind?fMXN(it.ind):'—'}</td>
       <td class="mono val-calc" style="font-weight:700">${fMXN(it.costoManuf)}</td>
       <td class="mono val-calc">${fMXN(it.admin)}</td>
@@ -1134,7 +1119,7 @@ function secIntegral(R){
     "Material y precio cliente se conservan de cada inserto (azul, editable). La conversión viene de la ruta con tarifas por centro. Admin/comercial/logística se aplican sobre la conversión; financiamiento y garantías sobre el costo previo. Margen sobre venta ≠ markup.")
   +`<div class="filterbar"><span class="hint">${R.integral.length} insertos en la lista · ${R.readyCount} costeados.</span></div>
     <div class="scroll"><table><thead><tr>
-    <th class="l">Inserto</th><th>Vol. mensual</th><th>Mat. (USD)</th><th>% Merma</th><th>Mat. (MXN)</th><th>MO</th><th>Máquina</th><th>Indirectos</th>
+    <th class="l">Inserto</th><th>Vol. mensual</th><th>Mat. (USD)</th><th>% Merma</th><th>Mat. (MXN)</th><th>MO</th><th>Indirectos</th>
     <th>Costo manuf.</th><th>Admin</th><th>Comercial</th><th>Logística</th><th>Financ.</th><th>Costo integral</th>
     <th>Margen obj.</th><th>Precio sugerido</th><th>Precio cli. (USD)</th><th>Precio cli. (MXN)</th>
     <th>Utilidad/pza</th><th>Margen real</th><th>Markup</th><th class="l">Semáforo</th><th></th>
@@ -1321,7 +1306,7 @@ function secDiseno(R){
         <tr><td class="l">Precio cliente (US$, editable)</td><td>${inp(`inserts.${idx}.q26`)}</td></tr>
         <tr><td class="l">Contribución antes de conversión</td><td class="mono val-calc">${fUSD(util)}</td></tr>
         <tr><td class="l">Contribución % sobre venta</td><td class="mono val-calc">${q26>0?fPct(util/q26):'—'}</td></tr>
-      </table><div class="note" style="margin-top:10px">Este costo de material entra al <b>Costeo integral</b> como material del inserto. La utilidad final se calcula ahí, ya con mano de obra, máquina e indirectos de la <b>Ruta de proceso</b>.</div></div></div>
+      </table><div class="note" style="margin-top:10px">Este costo de material entra al <b>Costeo integral</b> como material del inserto. La utilidad final se calcula ahí, ya con mano de obra e indirectos de la <b>Ruta de proceso</b>.</div></div></div>
       <div class="card"><h3>Desglose por pieza</h3><div class="body"><table>
         <thead><tr><th class="l">Componente</th><th>Mat.</th><th>Costo inserto</th><th>% del material</th></tr></thead>
         <tbody>${dz.piezas.map(p=>`<tr><td class="l">${escapeHtml(String(p.comp||''))}</td><td class="mono">M${p.mat||1}</td>
@@ -1598,9 +1583,9 @@ function buildDashboardCharts(R){
 
   // B. Estructura del pool
   mk("ch_pool",{type:"doughnut",
-    data:{labels:["Energía","Mano de obra directa","Maquinaria","Indirectos fabriles"],
-      datasets:[{data:[R.energiaSubtotal,R.moDirecta,R.maqTotal,R.indFabril],
-        backgroundColor:[PAL[4],PAL[0],PAL[2],PAL[6]],borderWidth:2,borderColor:"#fff"}]},
+    data:{labels:["Energía","Mano de obra directa","Indirectos fabriles"],
+      datasets:[{data:[R.energiaSubtotal,R.moDirecta,R.indFabril],
+        backgroundColor:[PAL[4],PAL[0],PAL[6]],borderWidth:2,borderColor:"#fff"}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:"58%",
       plugins:{legend:{position:"right",labels:{boxWidth:12,padding:10}},
         tooltip:{callbacks:{label:c=>` ${c.label}: ${fMXN0(c.parsed)} (${fPct(c.parsed/R.pool)})`}}}}});
@@ -1690,7 +1675,7 @@ function secPresupuesto(R){
   </table>`;
 
   const gf=`<table>
-    <tr><td class="l">Manufactura (energía, MO directa, maquinaria, indirectos fabriles)</td><td class="mono val-calc">${fMXN(P.gfManuf)}</td></tr>
+    <tr><td class="l">Manufactura (energía, MO directa, indirectos fabriles)</td><td class="mono val-calc">${fMXN(P.gfManuf)}</td></tr>
     <tr><td class="l">Administración (nómina + indirectos)</td><td class="mono val-calc">${fMXN(P.gfAdmin)}</td></tr>
     <tr><td class="l">Comercial (nómina + indirectos)</td><td class="mono val-calc">${fMXN(P.gfComer)}</td></tr>
     <tr><td class="l">Logística</td><td class="mono val-calc">${fMXN(P.gfLog)}</td></tr>
@@ -1710,7 +1695,7 @@ function secPresupuesto(R){
   </table>`;
 
   return head("Presupuesto y punto de equilibrio","ESTADO DE RESULTADOS · EQUILIBRIO",
-    "Hoja financiera de la empresa. El costo variable es el material; la mano de obra, maquinaria e indirectos se tratan como gastos fijos del periodo (así es como los capturas, por mes). Punto de equilibrio = gastos fijos ÷ margen de contribución. Captura los volúmenes mensuales por inserto (en Costeo integral) para que refleje tus ventas reales.")
+    "Hoja financiera de la empresa. El costo variable es el material; la mano de obra y los indirectos se tratan como gastos fijos del periodo (así es como los capturas, por mes). Punto de equilibrio = gastos fijos ÷ margen de contribución. Captura los volúmenes mensuales por inserto (en Costeo integral) para que refleje tus ventas reales.")
   +`<div class="hero">
       ${hcard("Ventas mensuales",P.conVol?fMXN0(P.ventas):"—","con volúmenes capturados","",true)}
       ${hcard("Margen de contribución",fPct(P.ratio),P.conVol?"ponderado por mezcla":"promedio (sin volumen)")}
@@ -1727,7 +1712,7 @@ function secPresupuesto(R){
 
     <div class="exgrid">
       <div class="card"><h3>Estado de resultados mensual</h3><div class="pad">${pnl}
-        <div class="note" style="margin-top:10px">Utilidad de operación antes de impuestos. No incluye ISR/IVA ni depreciación fuera de maquinaria.</div></div></div>
+        <div class="note" style="margin-top:10px">Utilidad de operación antes de impuestos. No incluye ISR/IVA.</div></div></div>
       <div class="card"><h3>Punto de equilibrio</h3><div class="pad">${be}</div></div>
       <div class="card full"><h3>Gráfica de equilibrio</h3><div class="chartbox tall"><canvas id="ch_breakeven"></canvas></div></div>
       <div class="card full"><h3>Gastos fijos de operación (mensuales)</h3><div class="pad">${gf}</div></div>
@@ -1852,7 +1837,7 @@ function buildWorkbook(){
     ["= Utilidad (pérdida) de operación", P.utilOper==null?"— (captura volúmenes)":r2(P.utilOper)],
     [],
     ["GASTOS FIJOS DE OPERACIÓN (MXN/mes)"],
-    ["Manufactura (energía, MO directa, maquinaria, indirectos fabriles)", r2(P.gfManuf)],
+    ["Manufactura (energía, MO directa, indirectos fabriles)", r2(P.gfManuf)],
     ["Administración (nómina + indirectos)", r2(P.gfAdmin)],
     ["Comercial (nómina + indirectos)", r2(P.gfComer)],
     ["Logística", r2(P.gfLog)],
@@ -1872,12 +1857,12 @@ function buildWorkbook(){
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pre), "Presupuesto");
 
-  const H=["Inserto","Material USD","% Merma mat.","Material MXN","MO","Máquina","Indirectos",
+  const H=["Inserto","Material USD","% Merma mat.","Material MXN","MO","Indirectos",
     "Costo manufactura","Admin","Comercial","Logística","Financiamiento","Garantías","Costo integral",
     "Margen obj. %","Precio sugerido","Precio cliente USD","Precio cliente MXN","Utilidad/pza",
     "Margen real %","Markup %","Estado"];
   const body=R.integral.map(i=>[i.ins.id, r4(i.materialUSD), r2(i.mermaMat*100), r2(i.materialMXN),
-    r2(i.mo), r2(i.maq), r2(i.ind), r2(i.costoManuf), r2(i.admin), r2(i.comercial), r2(i.logistica),
+    r2(i.mo), r2(i.ind), r2(i.costoManuf), r2(i.admin), r2(i.comercial), r2(i.logistica),
     r2(i.financiamiento), r2(i.garantiaMXN), r2(i.costoIntegral), r2(i.margenObj*100),
     i.precioSug==null?"INCOMPLETO":r2(i.precioSug), r2(i.precioClUSD), r2(i.precioClMXN),
     i.utilidad==null?"":r2(i.utilidad), i.margenReal==null?"":r2(i.margenReal*100),
@@ -1891,15 +1876,15 @@ function buildWorkbook(){
 
   const PH=["Concepto","MXN/mes"];
   const pool=[PH,["Energía eléctrica",r2(R.energiaSubtotal)],["Mano de obra directa",r2(R.moDirecta)],
-    ["Maquinaria (deprec.+mant.)",r2(R.maqTotal)],["Indirectos fabriles",r2(R.indFabril)],
+    ["Indirectos fabriles",r2(R.indFabril)],
     ["TOTAL POOL",r2(R.pool)],[],["Capacidad práctica (h/mes)",r2(R.capPractica)],
     ["Tasa de planta (MXN/h)",R.tasaPlanta==null?"PENDIENTE":r2(R.tasaPlanta)]];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pool), "Pool");
 
-  const RH=["Inserto","Op","Proceso","Centro","Min prep/lote","Lote","Min MO/u","Min máq/u","N° op.",
+  const RH=["Inserto","Op","Proceso","Centro","Min prep/lote","Lote","Min MO/u","N° op.",
     "% retrab.","% merma","Costo total/u","Estado"];
   const rrows=R.rutaCalc.filter(r=>r.ins).map(r=>[r.ins,r.op,r.proc,r.ce,
-    r.prep,r.lote,r.minMO,r.minMaq,r.nop,r2(num(r.retrab)*100),r2(num(r.merma)*100),
+    r.prep,r.lote,r.minMO,r.nop,r2(num(r.retrab)*100),r2(num(r.merma)*100),
     r.totU==null?"":r2(r.totU), r.estado]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([RH,...rrows]), "Ruta de proceso");
 
@@ -2003,11 +1988,11 @@ const app={
   delMaterial(k){ S.catalogo.splice(k,1); save(); renderKPIs(); renderChain(); renderSection("placas"); },
   setEscenario(s){S.control.escenario=s;save();renderKPIs();renderChain();renderSection(current);},
   aplicarEscenarios(){ S.escenarios=clone(DEFAULTS.escenarios); save(); renderKPIs(); renderChain(); renderSection("control"); toast("Escenarios de North Foam aplicados"); },
+  refrescarTC(){ toast("Consultando Banxico…"); autoTC().then(()=>{ if(current==="control") renderSection("control"); }); },
   setTcOficial(v){ S.control.tcBase=v; S.control.tcFecha=new Date().toLocaleDateString("es-MX"); save(); renderKPIs(); renderChain(); renderSection("control"); toast("TC base actualizado a "+v); },
   setSensMetric(m){sensMetric=m;renderSection("dashboard");},
   setRutaFilter(v){rutaFilter=v;renderSection("ruta");},
   addEmp(){S.empleados.push({puesto:"Nuevo puesto",tipo:"Directa",centro:"Corte",period:"Semanal",sueldo:null,n:1,uniformes:0,capacitacion:0,ausent:0});save();renderSection("mano");},
-  addMaq(){S.maquinaria.push({equipo:"Nuevo equipo",centro:"Otros",adquisicion:null,vida:null,residual:0,mantenimiento:null,refacciones:null,seguro:null});save();renderSection("maquinaria");},
   addInd(){S.indirectos.push({c:"Nuevo concepto",cl:"Indirecto fijo",ce:"Otros",m:null});save();renderSection("indirectos");},
   addCarga(){S.energia.cargas.push({n:"Nueva carga",kw:0,h:0});save();renderSection("energia");},
   addRuta(){S.ruta.push({ins:S.inserts[0].id,op:20,proc:"Corte",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0});save();renderSection("ruta");},
@@ -2095,7 +2080,28 @@ document.addEventListener("change",e=>{
   setPath(el.dataset.path, el.value==="true");save();renderKPIs();renderChain();renderSection(current);
 });
 
+/* ===== Tipo de cambio automático (Banxico vía /api/tc) ===== */
+let TC_API=null;
+async function autoTC(){
+  if(S.control.tcAuto===false) return;
+  try{
+    const r=await fetch("/api/tc",{cache:"no-store"});
+    if(!r.ok) return;
+    const j=await r.json();
+    if(!j||(!j.fix&&!j.pagos)) return;
+    TC_API=j;
+    const pick=(S.control.tcSerie==="pagos"&&j.pagos)?j.pagos:(j.fix||j.pagos);
+    if(pick&&isFinite(pick.valor)&&pick.valor>0){
+      const cambio=(+S.control.tcBase!==+pick.valor)||(S.control.tcFecha!==pick.fecha);
+      S.control.tcBase=pick.valor; S.control.tcFecha=pick.fecha;
+      save(); renderKPIs(); renderChain();
+      if(current==="dashboard"||current==="control"||current==="presupuesto") renderSection(current);
+      if(cambio) toast("TC actualizado: $"+fN(pick.valor,4)+" ("+pick.fecha+")");
+    }
+  }catch(e){ /* sin conexión al endpoint: se conserva el valor capturado */ }
+}
 renderAll();
+autoTC();
 // Si Chart.js aún no cargaba en el primer render, reconstruye el panel al terminar de cargar.
 window.addEventListener("load",()=>{ if(current==="dashboard"||current==="presupuesto") renderSection(current); });
 </script>

@@ -152,6 +152,8 @@ input.f.pend{border-color:var(--pendLine);background:var(--pendBg)}
 .scroll td,.scroll th{padding-top:4px;padding-bottom:4px;vertical-align:middle}
 .scroll td.l{white-space:nowrap}
 .scroll input.f,.scroll select.f{padding-top:3px;padding-bottom:3px}
+table[style*="table-layout:fixed"] th{white-space:normal;line-height:1.25;vertical-align:bottom}
+table[style*="table-layout:fixed"] td{white-space:normal;overflow-wrap:anywhere}
 /* ---------- PANEL EJECUTIVO ---------- */
 .exhead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:4px}
 .exhead h2{font-size:19px;margin:0;font-weight:700}
@@ -1257,15 +1259,21 @@ function secDiseno(R){
       <div class="card"><h3>Piezas a cortar (para ${fN(Q,0)} insertos)</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
         <table><thead><tr><th class="l">Componente</th><th>Mat.</th><th>Pzas/inserto</th><th>Piezas totales</th><th>Pzas/placa</th><th>Placas (teórico)</th><th>Placas a cortar</th></tr></thead>
         <tbody>${reqPzRows||'<tr><td colspan="7" class="l" style="color:var(--muted2)">Sin piezas.</td></tr>'}</tbody></table></div></div></div>
-      <div class="card"><h3>Costo del material total</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
-        <table><thead><tr><th class="l">Material</th><th>Placas (teórico)</th><th>Placas a comprar</th><th>Precio placa</th><th>Costo teórico</th><th>Costo placas completas</th></tr></thead>
+      <div class="card"><h3>Costo del material total</h3><div class="body">
+        <table style="table-layout:fixed;width:100%"><thead><tr>
+          <th class="l" style="width:34%">Material</th><th style="width:13%">Placas<br>teórico</th><th style="width:13%">Placas a<br>comprar</th>
+          <th style="width:13%">Precio<br>placa</th><th style="width:13%">Costo<br>teórico</th><th style="width:14%">Costo placas<br>completas</th></tr></thead>
         <tbody>${reqMatRows||'<tr><td colspan="6" class="l" style="color:var(--muted2)">Define materiales y piezas.</td></tr>'}
           <tr class="total"><td class="l">Totales</td><td></td><td></td><td></td><td class="mono">${fUSD(totalTeorico)}</td><td class="mono">${fUSD(totalPlacas)}</td></tr>
-          <tr><td class="l">Costo total en pesos (× TC ${fN(R.tc,4)})</td><td colspan="3"></td><td class="mono val-calc">${fMXN(totalTeorico*R.tc)}</td><td class="mono val-calc">${fMXN(totalPlacas*R.tc)}</td></tr>
-          <tr><td class="l">Precio de venta total (MXN)</td><td colspan="4"></td><td class="mono val-calc">${fMXN(ingresoTot)}</td></tr>
-          <tr><td class="l">${completeIt?'Costo integral total (MXN)':'Costo integral (falta capturar ruta)'}</td><td colspan="4"></td><td class="mono val-calc">${completeIt?fMXN(costoIntMXN*Q):'—'}</td></tr>
-          <tr class="total"><td class="l">${completeIt?'Utilidad total (MXN)':'Contribución total antes de conversión (MXN)'}</td><td colspan="4"></td><td class="mono">${completeIt?fMXN(utilIntTot):fMXN(contribTot)}</td></tr>
-        </table></div>
+        </tbody></table>
+        <table style="margin-top:2px">
+          <tr class="sub"><td class="l" colspan="2">Resultado de la orden (${fN(Q,0)} insertos)</td></tr>
+          <tr><td class="l">Costo material — teórico (MXN)<div class="hint">× TC ${fN(R.tc,4)}</div></td><td class="mono val-calc">${fMXN(totalTeorico*R.tc)}</td></tr>
+          <tr><td class="l">Costo material — placas completas (MXN)</td><td class="mono val-calc">${fMXN(totalPlacas*R.tc)}</td></tr>
+          <tr><td class="l">Precio de venta total (MXN)</td><td class="mono val-calc">${fMXN(ingresoTot)}</td></tr>
+          <tr><td class="l">${completeIt?'Costo integral total (MXN)':'Costo integral (falta capturar ruta)'}</td><td class="mono val-calc">${completeIt?fMXN(costoIntMXN*Q):'—'}</td></tr>
+          <tr class="total"><td class="l">${completeIt?'Utilidad total (MXN)':'Contribución total antes de conversión (MXN)'}</td><td class="mono">${completeIt?fMXN(utilIntTot):fMXN(contribTot)}</td></tr>
+        </table>
         <div class="hint" style="padding:6px 12px">Costo teórico = costo unitario × cantidad (fraccional, ideal). Costo por placas completas = redondeando a placas enteras a comprar por material; la diferencia es el desperdicio por placa incompleta${totalTeorico>0?(' ('+fPct((totalPlacas-totalTeorico)/totalTeorico)+')'):''}.</div></div></div>
     </div>` : `<div class="note">Captura la cantidad de insertos deseados para ver las piezas a cortar y el costo total del material.</div>`;
   const matMXN=matUSD*R.tc;

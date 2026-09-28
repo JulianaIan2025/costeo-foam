@@ -372,7 +372,7 @@ const DEFAULTS={
     {nombre:"PE NEGRO #1.7 - 2.5\"",grosor:2.5,ancho:48,largo:108,costo:33.65},
     {nombre:"PE BLANCO #1.2 - 3\"",grosor:3,ancho:48,largo:108,costo:39.37},
     {nombre:"PE NEGRO #1.7 - 3\"",grosor:3,ancho:48,largo:108,costo:40.38},
-    {nombre:"PU GRIS #1.44 BUN - 45\"",grosor:45,ancho:83,largo:98,costo:1999.99,bloque:true},
+    {nombre:"PU GRIS #1.44 BUN - 45\"",grosor:45,ancho:83,largo:98,costo:1999.99},
     {nombre:"PU GRIS #1.44 CONVO - 1.5\"",grosor:1.5,ancho:40,largo:96,costo:32.13}
   ],
   perInsert:{ /* id -> {mermaMat, margenObj(null=default), garantia} */ },
@@ -434,6 +434,7 @@ function ensureEscenarios(){
 }
 
 /* --- Costeo de placas por inserto --- */
+function esBloqueMat(nombre){ return /\bBUN\b/i.test(String(nombre||"")); }
 function catFind(nombre){return (S.catalogo||[]).find(m=>m.nombre===nombre);}
 function ensureDiseno(ins){
   if(!ins.diseno) ins.diseno={materiales:[{},{},{}],piezas:[]};
@@ -447,7 +448,7 @@ function matEff(slot){
   const pick=(v,cv)=>(v!=null&&v!=="")?num(v):(cv!=null?num(cv):0);
   return {nombre:slot.nombre||"",precio:pick(slot.precio,c.costo),largo:pick(slot.largo,c.largo),
           ancho:pick(slot.ancho,c.ancho),grosor:pick(slot.grosor,c.grosor),
-          bloque:(slot.bloque!==undefined?!!slot.bloque:!!c.bloque)};
+          bloque:esBloqueMat(slot.nombre)};
 }
 function disenoCalc(ins){
   const d=ins.diseno; if(!d||!d.piezas||!d.piezas.length) return null;
@@ -1243,11 +1244,6 @@ function sortInserts(){
   S.inserts.sort((a,b)=>String(a.id==null?"":a.id).localeCompare(String(b.id==null?"":b.id),undefined,{numeric:true,sensitivity:"base"}));
 }
 document.addEventListener("change",e=>{
-  const el=e.target; if(!el.dataset||el.dataset.blk===undefined) return;
-  const k=+el.dataset.blk; if(S.catalogo&&S.catalogo[k]) S.catalogo[k].bloque=el.checked;
-  save(); renderKPIs(); renderChain(); renderSection("placas");
-});
-document.addEventListener("change",e=>{
   const el=e.target; if(!el.dataset||el.dataset.ov===undefined) return;
   const [grupo,clave]=String(el.dataset.ov).split("|");
   let v=null;
@@ -1354,7 +1350,6 @@ function secDiseno(R){
     <td>${fracInput(`catalogo.${k}.ancho`,'in')}</td>
     <td>${fracInput(`catalogo.${k}.largo`,'in')}</td>
     <td>${inp(`catalogo.${k}.costo`)}</td>
-    <td style="text-align:center"><input type="checkbox" data-blk="${k}" ${m.bloque?'checked':''} title="Bloque: se corta en capas y el grosor se captura por pieza"></td>
     <td><button class="del" onclick="app.delMaterial(${k})">✕</button></td></tr>`).join("");
 
   return head("Costeo de placas — optimización de corte","INSERTO (hoja individual del Excel)",
@@ -1389,7 +1384,7 @@ function secDiseno(R){
       <th title="Solo para Placa suajada">Suaje<br>med. 1</th><th title="Solo para Placa suajada">Suaje<br>med. 2</th><th title="Un suaje por pieza; igual a la cantidad por inserto">N°<br>suajes</th><th title="Área recuperada que no se costea">Recup.</th>
       <th>Pzas/placa<br>(o1/o2 · bloque)</th><th>Pzas/placa<br>(usar)</th><th>Aprov.</th><th>Costo<br>unit. $</th><th>Costo<br>inserto $</th><th></th></tr></thead>
       <tbody>${pRows||`<tr><td colspan="12" class="l" style="color:var(--muted2)">Sin piezas. Agrega la primera con el botón de abajo.</td></tr>`}</tbody></table></div>
-      <div class="hint" style="padding:6px 12px">Las medidas aceptan fracciones (17 3/4). El <b>grosor</b> lo toma del material seleccionado. La excepción son los materiales marcados como <b>bloque</b> (ej. PU BUN): ahí capturas el <b>grosor de cada pieza</b> en su renglón (el espesor del bloque es fijo del catálogo) y el sistema calcula cuántas capas salen. En <b>Placa suajada</b>, captura las medidas del hueco: esa área se descuenta del costo porque el material recuperado se reutiliza en otro inserto — no es merma. El <b>N° de suajes</b> es fijo (un suaje por pieza), así que equivale a la cantidad por inserto.</div>
+      <div class="hint" style="padding:6px 12px">Las medidas aceptan fracciones (17 3/4). El <b>grosor</b> lo toma del material seleccionado. La excepción es el <b>BUN</b> (bloque de poliuretano), que se reconoce solo: ahí capturas el <b>grosor de cada pieza</b> en su renglón (el espesor del bloque es fijo del catálogo) y el sistema calcula cuántas capas salen. En <b>Placa suajada</b>, captura las medidas del hueco: esa área se descuenta del costo porque el material recuperado se reutiliza en otro inserto — no es merma. El <b>N° de suajes</b> es fijo (un suaje por pieza), así que equivale a la cantidad por inserto.</div>
       <button class="rowbtn" onclick="app.addPieza(${idx})">+ Agregar pieza</button></div></div>
 
     <div class="grid2" style="margin-top:16px">
@@ -1407,7 +1402,7 @@ function secDiseno(R){
     </div>
 
     <div class="card" style="margin-top:16px"><h3>Catálogo de placas (materiales) <span class="hint" style="font-weight:400">— compartido por todos los insertos</span></h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
-      <table><thead><tr><th class="l">Material</th><th>Grosor in</th><th>Ancho in</th><th>Largo in</th><th>Costo placa $</th><th title="Se corta en capas al grosor requerido">Bloque</th><th></th></tr></thead>
+      <table><thead><tr><th class="l">Material</th><th>Grosor in</th><th>Ancho in</th><th>Largo in</th><th>Costo placa $</th><th></th></tr></thead>
       <tbody>${catRows}</tbody></table></div>
       <button class="rowbtn" onclick="app.addMaterial()">+ Agregar material</button>
       <div class="hint" style="padding:6px 12px">Al actualizar el precio o medida de una placa aquí, se recalculan todos los insertos que la usan.</div></div></div>`;

@@ -170,6 +170,7 @@ table.compact input.f.txt{width:74px}
 table.compact .lz{font-size:10.5px;padding:1px 6px;gap:4px}
 table.compact .del{padding:0 4px}
 table.compact .val-pend{font-size:10px;padding:1px 4px}
+td.sua-off{background:repeating-linear-gradient(45deg,#f6f8f9,#f6f8f9 4px,#eef2f4 4px,#eef2f4 8px)}
 /* ---------- PANEL EJECUTIVO ---------- */
 .exhead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:4px}
 .exhead h2{font-size:19px;margin:0;font-weight:700}
@@ -368,6 +369,7 @@ const DEFAULTS={
   ],
   perInsert:{ /* id -> {mermaMat, margenObj(null=default), garantia} */ },
   presupuesto:{otrosFijos:0,meta:null},
+  periodos:{}, periodoActivo:null,
   ruta:[
     {ins:"160143",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
     {ins:"160145",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
@@ -445,11 +447,20 @@ function disenoCalc(ins){
     const o1=(m1>0&&m2>0&&M.largo>0&&M.ancho>0)?Math.floor(M.largo/m1)*Math.floor(M.ancho/m2):0;
     const o2=(m1>0&&m2>0&&M.largo>0&&M.ancho>0)?Math.floor(M.largo/m2)*Math.floor(M.ancho/m1):0;
     const ppp=(p.piezasManual!=null&&p.piezasManual!=="")?num(p.piezasManual):Math.max(o1,o2);
-    const costoUnit=ppp>0?M.precio/ppp:0;
+    // Placa suajada: el material del suaje se recupera para otros insertos → no se costea
+    const esSuaje=(p.comp==="Placa suajada");
+    const areaBruta=m1*m2;
+    const recArea=esSuaje?Math.min(areaBruta, num(p.s1)*num(p.s2)*Math.max(1,num(p.sn)||1)):0;
+    const areaNeta=Math.max(0,areaBruta-recArea);
+    const factorRec=(areaBruta>0)?(areaNeta/areaBruta):1;
+    const costoBruto=ppp>0?M.precio/ppp:0;
+    const costoUnit=costoBruto*factorRec;
     const cant=num(p.cant);
-    const areaP=m1*m2, areaPl=M.largo*M.ancho;
-    const aprov=(areaPl>0)?(ppp*areaP)/areaPl:0;
-    return {...p,o1,o2,ppp,orient:(o2>o1?"Orient. 2":"Orient. 1"),costoUnit,costoInserto:costoUnit*cant,aprov};
+    const areaPl=M.largo*M.ancho;
+    const aprov=(areaPl>0)?(ppp*areaBruta)/areaPl:0;
+    return {...p,o1,o2,ppp,orient:(o2>o1?"Orient. 2":"Orient. 1"),costoBruto,costoUnit,
+            costoInserto:costoUnit*cant,aprov,esSuaje,areaBruta,recArea,areaNeta,factorRec,
+            recPct:(areaBruta>0?recArea/areaBruta:0)};
   });
   return {mats,piezas,totalUSD:piezas.reduce((a,p)=>a+p.costoInserto,0)};
 }
@@ -734,20 +745,21 @@ document.addEventListener("input",e=>{ if(e.target.dataset&&e.target.dataset.pat
 /* ===================== SECCIONES ===================== */
 const SECTIONS=[
   {id:"dashboard",ix:"01",name:"Panel ejecutivo"},
-  {id:"presupuesto",ix:"02",name:"Presupuesto y equilibrio"},
-  {id:"resumen",ix:"03",name:"Resumen"},
-  {id:"control",ix:"04",name:"Control y escenarios"},
-  {id:"capacidad",ix:"05",name:"Capacidad"},
-  {id:"mano",ix:"06",name:"Mano de obra"},
-  {id:"indirectos",ix:"07",name:"Indirectos"},
-  {id:"energia",ix:"08",name:"Energía y pool"},
-  {id:"centros",ix:"09",name:"Centros de costo"},
-  {id:"ruta",ix:"10",name:"Ruta de proceso"},
-  {id:"financiero",ix:"11",name:"Costo financiero"},
-  {id:"integral",ix:"12",name:"Costeo integral"},
-  {id:"placas",ix:"13",name:"Costeo de placas"},
-  {id:"diagrama",ix:"14",name:"Diagrama de corte"},
-  {id:"validacion",ix:"15",name:"Validación"}
+  {id:"mes",ix:"02",name:"Costeo mensual"},
+  {id:"presupuesto",ix:"03",name:"Presupuesto y equilibrio"},
+  {id:"resumen",ix:"04",name:"Resumen"},
+  {id:"control",ix:"05",name:"Control y escenarios"},
+  {id:"capacidad",ix:"06",name:"Capacidad"},
+  {id:"mano",ix:"07",name:"Mano de obra"},
+  {id:"indirectos",ix:"08",name:"Indirectos"},
+  {id:"energia",ix:"09",name:"Energía y pool"},
+  {id:"centros",ix:"10",name:"Centros de costo"},
+  {id:"ruta",ix:"11",name:"Ruta de proceso"},
+  {id:"financiero",ix:"12",name:"Costo financiero"},
+  {id:"integral",ix:"13",name:"Costeo integral"},
+  {id:"placas",ix:"14",name:"Costeo de placas"},
+  {id:"diagrama",ix:"15",name:"Diagrama de corte"},
+  {id:"validacion",ix:"16",name:"Validación"}
 ];
 let current="dashboard";
 
@@ -1167,6 +1179,14 @@ function sortInserts(){
   S.inserts.sort((a,b)=>String(a.id==null?"":a.id).localeCompare(String(b.id==null?"":b.id),undefined,{numeric:true,sensitivity:"base"}));
 }
 document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||el.dataset.mes===undefined) return;
+  const P=ensurePeriodo(periodoKey()); const id=el.dataset.mes;
+  if(!P.items[id]) P.items[id]={};
+  if(el.dataset.campo==="inc"){ P.items[id].inc=el.checked; }
+  else { P.items[id].vol=(el.value===""?null:parseFloat(el.value)); if(P.items[id].vol>0) P.items[id].inc=true; }
+  save(); renderKPIs(); renderChain(); renderSection("mes");
+});
+document.addEventListener("change",e=>{
   const el=e.target; if(!el.dataset||el.dataset.frac===undefined) return;
   setPath(el.dataset.frac, parseFrac(el.value));
   save(); renderKPIs(); renderChain(); renderSection(current);
@@ -1228,10 +1248,14 @@ function secDiseno(R){
     <td>${fracInput(`inserts.${idx}.diseno.piezas.${j}.grosor`,'0')}</td>
     <td>${selRaw(`inserts.${idx}.diseno.piezas.${j}.mat`,["1","2","3"],String(p.mat||1))}</td>
     <td>${inp(`inserts.${idx}.diseno.piezas.${j}.cant`)}</td>
+    <td class="${p.esSuaje?'':'sua-off'}" title="Medidas del hueco suajado (material recuperable)">${p.esSuaje?fracInput(`inserts.${idx}.diseno.piezas.${j}.s1`,'0'):'<span class="hint">—</span>'}</td>
+    <td class="${p.esSuaje?'':'sua-off'}">${p.esSuaje?fracInput(`inserts.${idx}.diseno.piezas.${j}.s2`,'0'):'<span class="hint">—</span>'}</td>
+    <td class="${p.esSuaje?'':'sua-off'}" title="Cuántos huecos suajados tiene la pieza">${p.esSuaje?inp(`inserts.${idx}.diseno.piezas.${j}.sn`):'<span class="hint">—</span>'}</td>
+    <td class="mono val-calc" title="Área recuperada que NO se costea">${p.esSuaje?fPct(p.recPct):'<span class="hint">—</span>'}</td>
     <td class="mono val-calc">${p.o1} / ${p.o2}</td>
     <td>${ovInput(`inserts.${idx}.diseno.piezas.${j}.piezasManual`,String(Math.max(p.o1,p.o2)))}</td>
     <td class="mono val-calc">${fPct(p.aprov)}</td>
-    <td class="mono val-calc">${fUSD(p.costoUnit)}</td>
+    <td class="mono val-calc" title="${p.esSuaje?('Bruto '+fUSD(p.costoBruto)+' menos el suaje recuperado'):''}">${fUSD(p.costoUnit)}</td>
     <td class="mono val-calc" style="font-weight:700">${fUSD(p.costoInserto)}</td>
     <td><button class="del" onclick="app.delPieza(${idx},${j})">✕</button></td></tr>`).join("");
 
@@ -1318,8 +1342,11 @@ function secDiseno(R){
       <div class="hint" style="padding:6px 12px">Elige el material del catálogo y su precio y medidas se toman solos (déjalos en blanco para usar el catálogo, o captura un valor para sobreescribir). Usa "(manual)" para un material fuera del catálogo.</div></div></div>
 
     <div class="card" style="margin-top:16px"><h3>Piezas / componentes</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
-      <table><thead><tr><th class="l">Componente</th><th>Medida 1 in</th><th>Medida 2 in</th><th>Grosor in</th><th>Mat.</th><th>Cant./inserto</th><th>Pzas/placa (o1/o2)</th><th>Pzas/placa (usar)</th><th>Aprov.</th><th>Costo unit. $</th><th>Costo inserto $</th><th></th></tr></thead>
+      <table class="compact"><thead><tr><th class="l">Componente</th><th>Medida 1<br>in</th><th>Medida 2<br>in</th><th>Grosor<br>in</th><th>Mat.</th><th>Cant./<br>inserto</th>
+      <th title="Solo para Placa suajada">Suaje<br>med. 1</th><th title="Solo para Placa suajada">Suaje<br>med. 2</th><th title="Número de huecos suajados">N°<br>suajes</th><th title="Área recuperada que no se costea">Recup.</th>
+      <th>Pzas/placa<br>(o1/o2)</th><th>Pzas/placa<br>(usar)</th><th>Aprov.</th><th>Costo<br>unit. $</th><th>Costo<br>inserto $</th><th></th></tr></thead>
       <tbody>${pRows||`<tr><td colspan="12" class="l" style="color:var(--muted2)">Sin piezas. Agrega la primera con el botón de abajo.</td></tr>`}</tbody></table></div>
+      <div class="hint" style="padding:6px 12px">Las medidas aceptan fracciones (17 3/4). En <b>Placa suajada</b>, captura las medidas del hueco suajado: esa área se descuenta del costo porque el material recuperado se reutiliza en otro inserto — no se considera merma.</div>
       <button class="rowbtn" onclick="app.addPieza(${idx})">+ Agregar pieza</button></div></div>
 
     <div class="grid2" style="margin-top:16px">
@@ -1362,15 +1389,21 @@ function cutCalc(p,mat){
 function plateSVG(p,mat){
   const d=cutCalc(p,mat); if(!d) return null;
   const maxW=380,maxH=250, scale=Math.min(maxW/d.L,maxH/d.A), w=d.L*scale, h=d.A*scale;
+  const esSuaje=(p.comp==="Placa suajada");
+  const s1=num(p.s1),s2=num(p.s2);
   let rects="";
   for(let r=0;r<d.rows;r++) for(let c=0;c<d.cols;c++){
-    const x=(c*d.pw*scale).toFixed(1), y=(r*d.ph*scale).toFixed(1);
-    rects+=`<rect x="${x}" y="${y}" width="${(d.pw*scale-1).toFixed(1)}" height="${(d.ph*scale-1).toFixed(1)}" rx="1.5" fill="#2f9e8f" stroke="#ffffff" stroke-width="0.8"/>`;
+    const x=c*d.pw*scale, y=r*d.ph*scale, pw=d.pw*scale-1, ph=d.ph*scale-1;
+    rects+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph.toFixed(1)}" rx="1.5" fill="#2f9e8f" stroke="#ffffff" stroke-width="0.8"/>`;
+    if(esSuaje&&s1>0&&s2>0){
+      const hw=Math.min(pw*0.92,(d.useO2?s2:s1)*scale), hh=Math.min(ph*0.92,(d.useO2?s1:s2)*scale);
+      if(hw>0&&hh>0) rects+=`<rect x="${(x+(pw-hw)/2).toFixed(1)}" y="${(y+(ph-hh)/2).toFixed(1)}" width="${hw.toFixed(1)}" height="${hh.toFixed(1)}" rx="1" fill="#9ec9e8" stroke="#ffffff" stroke-width="0.6"/>`;
+    }
   }
   const svg=`<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" width="100%" style="max-width:${w.toFixed(0)}px;height:auto;display:block;border-radius:6px">
     <defs><pattern id="hatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="#cbd3da" stroke-width="2"/></pattern></defs>
     <rect x="0" y="0" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="url(#hatch)" stroke="#98a2ac" stroke-width="1.2"/>${rects}</svg>`;
-  return {svg,cols:d.cols,rows:d.rows,ppp:d.ppp,aprov:d.aprov,useO2:d.useO2,o1:d.o1,o2:d.o2};
+  return {svg,cols:d.cols,rows:d.rows,ppp:d.ppp,aprov:d.aprov,useO2:d.useO2,o1:d.o1,o2:d.o2,esSuaje};
 }
 function fillPlateMixed(types,L,A){
   const minArea=Math.min(...types.map(t=>t.w*t.h));
@@ -1417,7 +1450,7 @@ function secDiagrama(R){
     blocks+=`<div class="card" style="margin-top:14px"><h3>${escapeHtml(p.comp||'Pieza')} <span class="hint" style="font-weight:400">· ${escapeHtml(mat.nombre||('Material '+(p.mat||1)))}</span></h3>
       <div class="pad"><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
         <div style="flex:1;min-width:280px">${d.svg}
-          <div class="legend" style="margin-top:8px"><span><span class="sw" style="background:#2f9e8f"></span>Aprovechado (${d.ppp} pzas)</span><span><span class="sw" style="background:#cbd3da"></span>Merma (recorte)</span></div></div>
+          <div class="legend" style="margin-top:8px"><span><span class="sw" style="background:#2f9e8f"></span>Aprovechado (${d.ppp} pzas)</span>${d.esSuaje?'<span><span class="sw" style="background:#9ec9e8"></span>Suaje recuperado (no se costea)</span>':''}<span><span class="sw" style="background:#cbd3da"></span>Merma (recorte)</span></div></div>
         <div style="min-width:220px"><table>
           <tr><td class="l">Placa (largo × ancho)</td><td class="mono val-calc">${fN(num(mat.largo),1)} × ${fN(num(mat.ancho),1)} in</td></tr>
           <tr><td class="l">Pieza (med. 1 × med. 2)</td><td class="mono val-calc">${fN(num(p.m1),2)} × ${fN(num(p.m2),2)} in</td></tr>
@@ -1469,6 +1502,103 @@ function secDiagrama(R){
   +`<div class="exsel" style="display:inline-flex;margin-bottom:6px"><span>Inserto</span>
       <select onchange="app.setDiagrama(this.value)">${insOpts}</select></div>
     ${resumen}${blocks}${nestSec}`;
+}
+
+/* ---------- COSTEO MENSUAL (insertos trabajados en el mes) ---------- */
+function mesActual(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function periodoKey(){ if(!S.periodoActivo) S.periodoActivo=mesActual(); return S.periodoActivo; }
+function ensurePeriodo(k){ if(!S.periodos) S.periodos={}; if(!S.periodos[k]) S.periodos[k]={items:{}}; if(!S.periodos[k].items) S.periodos[k].items={}; return S.periodos[k]; }
+function nombreMes(k){
+  if(!k||!/^\d{4}-\d{2}$/.test(k)) return k||"";
+  const [y,m]=k.split("-").map(Number);
+  const N=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  return (N[m-1]||"")+" "+y;
+}
+function computeMes(R,k){
+  const P=ensurePeriodo(k||periodoKey());
+  const filas=R.integral.map(it=>{
+    const id=String(it.ins.id); const cfg=P.items[id]||{};
+    const inc=cfg.inc===true; const vol=num(cfg.vol);
+    const ventas=it.precioClMXN*vol;
+    const costo=it.complete?it.costoIntegral*vol:null;
+    const material=it.materialMXN*vol;
+    const util=it.complete?it.utilidad*vol:null;
+    return {it,id,inc,vol,ventas,costo,material,util,
+            contrib:(it.precioClMXN-it.materialMXN)*vol};
+  });
+  const act=filas.filter(f=>f.inc&&f.vol>0);
+  const comp=act.filter(f=>f.it.complete);
+  const ventas=act.reduce((a,f)=>a+f.ventas,0);
+  const material=act.reduce((a,f)=>a+f.material,0);
+  const contrib=act.reduce((a,f)=>a+f.contrib,0);
+  const costoAbs=comp.reduce((a,f)=>a+f.costo,0);
+  const utilAbs=comp.reduce((a,f)=>a+f.util,0);
+  const piezas=act.reduce((a,f)=>a+f.vol,0);
+  const Pre=computePresupuesto(R);
+  return {P,filas,act,comp,ventas,material,contrib,costoAbs,utilAbs,piezas,
+          margen:(ventas>0?utilAbs/ventas:null), fijos:Pre.GF,
+          utilOper:contrib-Pre.GF, incompletos:act.length-comp.length};
+}
+function secMes(R){
+  const k=periodoKey(); const M=computeMes(R,k);
+  const rows=M.filas.map(f=>`<tr${f.inc?'':' style="opacity:.5"'}>
+    <td class="l"><label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" data-mes="${escapeHtml(f.id)}" data-campo="inc" ${f.inc?'checked':''}>
+      <span class="mono">${escapeHtml(f.id)}</span></label></td>
+    <td><input class="f" type="number" step="any" data-mes="${escapeHtml(f.id)}" data-campo="vol" value="${f.vol||''}" placeholder="0"></td>
+    <td class="mono val-calc">${fMXN(f.it.costoIntegral)}</td>
+    <td class="mono val-calc">${fMXN(f.it.precioClMXN)}</td>
+    <td class="mono val-calc">${f.inc&&f.vol>0?fMXN(f.ventas):'—'}</td>
+    <td class="mono val-calc">${f.inc&&f.vol>0&&f.it.complete?fMXN(f.costo):'—'}</td>
+    <td class="mono val-calc" style="font-weight:700">${f.inc&&f.vol>0&&f.it.complete?fMXN(f.util):'—'}</td>
+    <td class="mono">${f.it.margenReal==null?'—':fPct(f.it.margenReal)}</td>
+    <td class="l"><span class="lz ${f.it.luz}"><span class="b"></span>${f.it.estado.replace(' · ','·').replace('COSTEO INCOMPLETO','Incompleto')}</span></td></tr>`).join("");
+  const hist=Object.keys(S.periodos||{}).sort().reverse();
+  return head("Costeo mensual — insertos trabajados en el mes","REPORTE POR PERIODO",
+    "Selecciona el mes y marca qué insertos se trabajan, con su volumen del periodo. Los costos unitarios vienen de <b>Costeo de placas</b> y <b>Ruta de proceso</b> (información fija del catálogo); aquí solo defines qué y cuánto se produce cada mes. Cada periodo se guarda por separado para consultarlo después.")
+  +`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <div class="exsel" style="display:inline-flex"><span>Periodo</span>
+        <input type="month" class="f" style="width:140px" value="${escapeHtml(k)}" onchange="app.setPeriodo(this.value)"></div>
+      <span class="hint">${nombreMes(k)} · ${M.act.length} insertos · ${fN(M.piezas,0)} pzas${hist.length>1?(' · '+hist.length+' periodos guardados'):''}</span>
+      <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="rowbtn" style="margin:0" onclick="app.mesTodos(true)">Marcar todos</button>
+        <button class="rowbtn" style="margin:0" onclick="app.mesTodos(false)">Desmarcar</button>
+        <button class="rowbtn" style="margin:0" onclick="app.mesCopiarVol()">Traer volúmenes del catálogo</button>
+        <button class="rowbtn" style="margin:0" onclick="app.mesAplicarPanel()">Aplicar al panel</button>
+      </div>
+    </div>
+
+    <div class="hero">
+      ${hcard("Ventas del mes", fMXN0(M.ventas), nombreMes(k), "", true)}
+      ${hcard("Costo integral", M.comp.length?fMXN0(M.costoAbs):"—", M.incompletos?(M.incompletos+" sin ruta"):"insertos completos", M.incompletos?"a":"v")}
+      ${hcard("Utilidad del mes", M.comp.length?fMXN0(M.utilAbs):"—", M.margen!=null?("margen "+fPct(M.margen)):"captura volúmenes", M.utilAbs>0?"v":(M.comp.length?"r":"g"))}
+      ${hcard("Piezas a producir", fN(M.piezas,0), M.act.length+" insertos activos")}
+    </div>
+
+    <div class="tabla-integral" style="margin-top:14px"><table class="compact"><thead><tr>
+      <th class="l">Incluir / inserto</th><th>Volumen<br>del mes</th><th>Costo<br>integral u.</th><th>Precio<br>cliente u.</th>
+      <th>Ventas<br>del mes</th><th>Costo<br>del mes</th><th>Utilidad<br>del mes</th><th>Margen</th><th class="l">Estado</th>
+      </tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr class="total"><td class="l">Totales del periodo</td><td class="mono">${fN(M.piezas,0)}</td><td></td><td></td>
+        <td class="mono">${fMXN(M.ventas)}</td><td class="mono">${fMXN(M.costoAbs)}</td><td class="mono">${fMXN(M.utilAbs)}</td>
+        <td class="mono">${M.margen==null?'—':fPct(M.margen)}</td><td></td></tr></tfoot></table></div>
+
+    <div class="grid2" style="margin-top:16px">
+      <div class="card"><h3>Resultado del periodo · ${nombreMes(k)}</h3><div class="pad"><table class="fija">
+        <tr><td class="l" style="width:58%">Ventas del mes</td><td class="mono val-calc">${fMXN(M.ventas)}</td></tr>
+        <tr><td class="l">(−) Material</td><td class="mono val-calc">(${fMXN(M.material)})</td></tr>
+        <tr class="sub"><td class="l">= Margen de contribución</td><td class="mono">${fMXN(M.contrib)}</td></tr>
+        <tr><td class="l">(−) Gastos fijos del mes</td><td class="mono val-calc">(${fMXN(M.fijos)})</td></tr>
+        <tr class="total"><td class="l">= Utilidad de operación</td><td class="mono">${fMXN(M.utilOper)}</td></tr>
+      </table><div class="note" style="margin-top:10px">Lectura directa: contribución de lo que se produce este mes contra los gastos fijos del periodo.</div></div></div>
+      <div class="card"><h3>Por absorción (costo integral)</h3><div class="pad"><table class="fija">
+        <tr><td class="l" style="width:58%">Ventas del mes</td><td class="mono val-calc">${fMXN(M.ventas)}</td></tr>
+        <tr><td class="l">(−) Costo integral de lo vendido</td><td class="mono val-calc">(${fMXN(M.costoAbs)})</td></tr>
+        <tr class="total"><td class="l">= Utilidad del mes</td><td class="mono">${fMXN(M.utilAbs)}</td></tr>
+        <tr><td class="l">Margen ponderado</td><td class="mono val-calc">${M.margen==null?'—':fPct(M.margen)}</td></tr>
+        <tr><td class="l">Insertos sin costeo completo</td><td class="mono val-calc">${M.incompletos}</td></tr>
+      </table><div class="note" style="margin-top:10px">Cada pieza ya absorbe su parte de conversión y gastos. Sólo incluye insertos con ruta capturada.</div></div></div>
+    </div>`;
 }
 
 /* ---------- VALIDACIÓN ---------- */
@@ -1768,7 +1898,7 @@ function buildPresupuestoCharts(R){
 function renderSection(id){
   destroyCharts();
   const R=compute();
-  const map={dashboard:secDashboard,presupuesto:secPresupuesto,resumen:secResumen,control:secControl,capacidad:secCapacidad,mano:secMano,
+  const map={dashboard:secDashboard,mes:secMes,presupuesto:secPresupuesto,resumen:secResumen,control:secControl,capacidad:secCapacidad,mano:secMano,
     indirectos:secIndirectos,energia:secEnergia,centros:secCentros,
     ruta:secRuta,financiero:secFinanciero,integral:secIntegral,placas:secDiseno,diagrama:secDiagrama,validacion:secValidacion};
   document.getElementById("content").innerHTML=(map[id]||secDashboard)(R);
@@ -1879,6 +2009,18 @@ function buildWorkbook(){
     ["Meta vs. equilibrio", (P.meta!=null&&P.PE!=null)?r2(P.meta-P.PE):"—"]
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pre), "Presupuesto");
+
+  const kk=periodoKey(); const M=computeMes(R,kk);
+  if(M.act.length){
+    const mesRows=[["COSTEO MENSUAL — "+nombreMes(kk)],[],
+      ["Inserto","Volumen","Costo integral u.","Precio cliente u.","Ventas del mes","Costo del mes","Utilidad del mes","Margen %","Estado"]];
+    M.act.forEach(f=>mesRows.push([f.id,f.vol,r2(f.it.costoIntegral),r2(f.it.precioClMXN),r2(f.ventas),
+      f.it.complete?r2(f.costo):"—",f.it.complete?r2(f.util):"—",f.it.margenReal==null?"—":r2(f.it.margenReal*100),f.it.estado]));
+    mesRows.push(["TOTALES",M.piezas,"","",r2(M.ventas),r2(M.costoAbs),r2(M.utilAbs),M.margen==null?"—":r2(M.margen*100),""]);
+    mesRows.push([],["Margen de contribución",r2(M.contrib)],["Gastos fijos del mes",r2(M.fijos)],
+      ["Utilidad de operación",r2(M.utilOper)],["Insertos sin costeo completo",M.incompletos]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mesRows), "Costeo mensual");
+  }
 
   const H=["Inserto","Material USD","% Merma mat.","Material MXN","MO","Indirectos",
     "Costo manufactura","Admin","Comercial","Logística","Financiamiento","Garantías","Costo integral",
@@ -1991,6 +2133,17 @@ const app={
       save(); renderKPIs(); renderChain(); renderSection(current); toast("Inserto "+(id||"")+" eliminado");
     }, "Eliminar inserto");
   },
+  setPeriodo(v){ if(!v) return; S.periodoActivo=v; ensurePeriodo(v); save(); renderSection("mes"); },
+  mesTodos(v){ const P=ensurePeriodo(periodoKey()); S.inserts.forEach(i=>{ const id=String(i.id); if(!P.items[id])P.items[id]={}; P.items[id].inc=v; }); save(); renderSection("mes"); },
+  mesCopiarVol(){ const P=ensurePeriodo(periodoKey()); let n=0;
+    S.inserts.forEach(i=>{ const id=String(i.id); const v=num((S.perInsert[id]||{}).volumen);
+      if(v>0){ if(!P.items[id])P.items[id]={}; P.items[id].vol=v; P.items[id].inc=true; n++; } });
+    save(); renderSection("mes"); toast(n?(n+" volúmenes traídos"):"El catálogo no tiene volúmenes capturados"); },
+  mesAplicarPanel(){ const P=ensurePeriodo(periodoKey()); let n=0;
+    S.inserts.forEach(i=>{ const id=String(i.id); const c=P.items[id]||{};
+      if(!S.perInsert[id]) S.perInsert[id]={};
+      S.perInsert[id].volumen=(c.inc&&num(c.vol)>0)?num(c.vol):null; if(c.inc&&num(c.vol)>0)n++; });
+    save(); renderKPIs(); renderChain(); renderSection("mes"); toast("Panel actualizado con "+n+" insertos del mes"); },
   setDiseno(id){ disenoSel=String(id); renderSection("placas"); },
   setDiagrama(id){ disenoSel=String(id); renderSection("diagrama"); },
   addNamedInsert(){
@@ -2084,6 +2237,104 @@ const app={
           styles:{font:"helvetica",fontSize:8,cellPadding:4,lineColor:[221,227,232],lineWidth:.5},
           headStyles:{fillColor:[30,48,64],textColor:255,fontStyle:"bold"},
           columnStyles:{0:{halign:"left",fontStyle:"bold"},1:{halign:"left"},2:{halign:"left"},4:{halign:"left"}}});
+      }
+      const P=computePresupuesto(R);
+      const tabla=(titulo,head,body,opts)=>{
+        if(!body||!body.length) return;
+        doc.addPage();
+        doc.setFont("helvetica","bold");doc.setFontSize(13);doc.setTextColor(22,34,46);
+        doc.text(titulo,40,42);
+        if(opts&&opts.sub){ doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(90,100,110);doc.text(opts.sub,40,58); }
+        doc.autoTable({head:[head],body:body,startY:(opts&&opts.sub)?72:60,
+          styles:{font:"helvetica",fontSize:8,cellPadding:4,lineColor:[221,227,232],lineWidth:.5,textColor:[24,36,48]},
+          headStyles:{fillColor:[30,48,64],textColor:255,fontStyle:"bold"},
+          columnStyles:(opts&&opts.cols)||{0:{halign:"left",fontStyle:"bold"},1:{halign:"left"}},
+          bodyStyles:{halign:"right"},
+          didParseCell:(opts&&opts.didParseCell)||undefined});
+      };
+
+      // Presupuesto y punto de equilibrio
+      const per=(P.PE!=null&&P.ventas>0)?P.PE/P.ventas:null;
+      let est; if(!P.conVol) est="Captura volúmenes para la utilidad real";
+        else if(P.utilOper>0) est="La empresa genera utilidad de operación";
+        else if(Math.abs(P.utilOper)<1) est="En punto de equilibrio"; else est="Por debajo del punto de equilibrio";
+      tabla("Presupuesto y punto de equilibrio",["Concepto","Importe / valor"],[
+        ["Ventas netas mensuales",P.conVol?fMXN(P.ventas):"—"],
+        ["(−) Costo variable — material",P.conVol?"("+fMXN(P.matMes)+")":"—"],
+        ["= Margen de contribución",P.conVol?fMXN(P.contribMes)+"  ("+fPct(P.ratio)+")":"—"],
+        ["(−) Gastos fijos de operación","("+fMXN(P.GF)+")"],
+        ["= Utilidad (pérdida) de operación",P.utilOper==null?"—":fMXN(P.utilOper)],
+        ["",""],
+        ["Punto de equilibrio (ventas)",P.PE==null?"—":fMXN(P.PE)],
+        ["Margen de contribución usado",fPct(P.ratio)],
+        ["Equilibrio como % de ventas actuales",per==null?"—":fPct(per)],
+        ["Margen de seguridad",P.margenSeg==null?"—":fPct(P.margenSeg)],
+        ["Faltante para el equilibrio",P.faltante==null?(P.conVol?fMXN(0):"—"):fMXN(P.faltante)],
+        ["Estado financiero",est],
+        ["",""],
+        ["Gastos fijos — manufactura",fMXN(P.gfManuf)],
+        ["Gastos fijos — administración",fMXN(P.gfAdmin)],
+        ["Gastos fijos — comercial",fMXN(P.gfComer)],
+        ["Gastos fijos — logística",fMXN(P.gfLog)],
+        ["Gastos fijos — financiero",fMXN(P.gfFin)],
+        ["Gastos fijos — otros",fMXN(P.otros)],
+        ["Total gastos fijos mensuales",fMXN(P.GF)]
+      ],{cols:{0:{halign:"left",fontStyle:"bold"}}});
+
+      // Costeo mensual del periodo activo
+      const kk=periodoKey(); const M=computeMes(R,kk);
+      if(M.act.length){
+        tabla("Costeo mensual — "+nombreMes(kk),
+          ["Inserto","Volumen","Costo integral u.","Precio cliente u.","Ventas del mes","Costo del mes","Utilidad del mes","Margen"],
+          M.act.map(f=>[f.id,fN(f.vol,0),fMXN(f.it.costoIntegral),fMXN(f.it.precioClMXN),fMXN(f.ventas),
+            f.it.complete?fMXN(f.costo):"—",f.it.complete?fMXN(f.util):"—",f.it.margenReal==null?"—":fPct(f.it.margenReal)])
+            .concat([["TOTALES",fN(M.piezas,0),"","",fMXN(M.ventas),fMXN(M.costoAbs),fMXN(M.utilAbs),M.margen==null?"—":fPct(M.margen)]]),
+          {sub:"Contribución "+fMXN(M.contrib)+"  −  gastos fijos "+fMXN(M.fijos)+"  =  utilidad de operación "+fMXN(M.utilOper),
+           cols:{0:{halign:"left",fontStyle:"bold"}}});
+      }
+
+      // Pool y centros de costo
+      tabla("Pool de manufactura y tarifas por centro",["Concepto","Valor"],[
+        ["Energía eléctrica",fMXN(R.energiaSubtotal)],
+        ["Mano de obra directa",fMXN(R.moDirecta)],
+        ["Indirectos fabriles",fMXN(R.indFabril)],
+        ["TOTAL POOL DE MANUFACTURA",fMXN(R.pool)],
+        ["Capacidad práctica",fN(R.capPractica,0)+" h/mes"],
+        ["Tasa de planta",R.tasaPlanta==null?"—":fMXN(R.tasaPlanta)+" /h"],
+        ["",""]
+      ].concat(R.centros.map(c=>["Centro: "+c.c,"MO "+fMXN(c.moRate)+"  ·  Indirectos "+fMXN(c.indRate)+"  ·  Total "+fMXN(c.total)+"/h"])),
+      {cols:{0:{halign:"left",fontStyle:"bold"}}});
+
+      // Ruta de proceso
+      const rutaBody=R.rutaCalc.filter(r=>r.ins).map(r=>[r.ins,String(r.op||""),r.proc||"",
+        isNum(r.prep)?fN(num(r.prep),1):"—",isNum(r.lote)?fN(num(r.lote),0):"—",
+        isNum(r.minMO)?fN(num(r.minMO),2):"—",fN(num(r.nop)||1,0),
+        r.totU==null?"—":fMXN(r.totU),r.estado||""]);
+      tabla("Ruta de proceso — tiempos y costo de conversión",
+        ["Inserto","Op","Proceso","Min prep/lote","Lote","Min MO/u","Operadores","Costo/u","Estado"],rutaBody,
+        {cols:{0:{halign:"left",fontStyle:"bold"},2:{halign:"left"},8:{halign:"left"}}});
+
+      // Requerimiento de material (insertos con cantidad deseada)
+      const reqBody=[];
+      S.inserts.forEach(ins=>{ const dz=disenoCalc(ins); if(!dz) return;
+        const Qd=num(ins.diseno&&ins.diseno.qDeseada); if(!(Qd>0)) return;
+        dz.piezas.forEach(p=>{ const tot=num(p.cant)*Qd, frac=p.ppp>0?tot/p.ppp:0;
+          reqBody.push([ins.id,fN(Qd,0),p.comp,"M"+(p.mat||1),fN(tot,0),String(p.ppp),String(Math.ceil(frac-1e-9))]); });
+      });
+      tabla("Requerimiento de material por cantidad terminada",
+        ["Inserto","Cantidad","Componente","Mat.","Piezas totales","Pzas/placa","Placas a cortar"],reqBody,
+        {cols:{0:{halign:"left",fontStyle:"bold"},2:{halign:"left"}}});
+
+      // Validación
+      tabla("Validación — controles de integridad",["Control","Resultado","Estado"],
+        R.valid.map(v=>[v.k,String(v.v),v.rev?"REVISAR":"OK"]),
+        {cols:{0:{halign:"left"},2:{halign:"left"}}});
+
+      // Numeración de páginas
+      const tot=doc.internal.getNumberOfPages();
+      for(let i=1;i<=tot;i++){ doc.setPage(i);
+        doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(140,150,160);
+        doc.text("North Foam · Costeo FOAM Integral · "+new Date().toLocaleDateString("es-MX")+"   —   Página "+i+" de "+tot,40,560);
       }
       const blob=doc.output("blob");
       saveFile("Costeo_FOAM_Integral.pdf", blob);

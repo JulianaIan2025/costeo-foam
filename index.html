@@ -1099,10 +1099,16 @@ function secCentros(R){
 /* ---------- RUTA ---------- */
 let rutaFilter="(todos)";
 function secRuta(R){
-  const insOpts=["(todos)"].concat(S.inserts.map(i=>i.id));
-  const shown=R.rutaCalc.map((r,i)=>({r,i})).filter(x=>rutaFilter==="(todos)"||x.r.ins===rutaFilter);
+  const insCli=S.inserts.filter(pasaCliente).map(i=>String(i.id));
+  const insOpts=["(todos)"].concat(insCli);
+  if(rutaFilter!=="(todos)"&&!insCli.includes(rutaFilter)) rutaFilter="(todos)";
+  const insDe=id=>S.inserts.find(x=>String(x.id)===String(id));
+  const shown=R.rutaCalc.map((r,i)=>({r,i}))
+    .filter(x=>insCli.includes(String(x.r.ins)))
+    .filter(x=>rutaFilter==="(todos)"||String(x.r.ins)===rutaFilter);
   const rows=shown.map(({r,i})=>`<tr>
     <td class="l">${sel(`ruta.${i}.ins`,S.inserts.map(x=>x.id))}</td>
+    <td class="l" title="Se define en Costeo de placas">${escapeHtml(clienteLabel(insDe(r.ins)))}</td>
     <td>${inp(`ruta.${i}.op`)}</td>
     <td class="l val-calc">${escapeHtml(String(r.proc||CENTRO_PROD))}</td>
     <td class="l val-calc">${escapeHtml(String(r.ce||CENTRO_PROD))}</td>
@@ -1117,10 +1123,12 @@ function secRuta(R){
     <td><button class="del" onclick="app.delRow('ruta',${i})">✕</button></td></tr>`).join("");
   return head("Ruta de proceso","RUTA_PROCESO",
     "Captura los tiempos reales por operación. Prep/unidad = min prep ÷ tamaño de lote. MO/unidad = min MO × operadores × tarifa MO ÷ 60. Se ajusta por retrabajo y merma. <b>Sin tiempos, el inserto queda incompleto.</b>")
-  +`<div class="filterbar"><span class="hint">Filtrar por inserto:</span>
-    <select class="f" onchange="app.setRutaFilter(this.value)">${insOpts.map(o=>`<option ${o===rutaFilter?'selected':''}>${o}</option>`).join("")}</select></div>
+  +`<div class="filterbar">${clienteSelector("setCliRuta")}
+    <div class="exsel" style="display:inline-flex"><span>Inserto</span>
+      <select onchange="app.setRutaFilter(this.value)">${insOpts.map(o=>`<option ${o===rutaFilter?'selected':''}>${escapeHtml(o)}</option>`).join("")}</select></div>
+    <span class="hint">${shown.length} operación(es)</span></div>
     <div class="scroll"><table><thead><tr>
-    <th class="l">Inserto</th><th>Op</th><th class="l">Proceso</th><th class="l">Centro</th><th>Min prep/lote</th><th>Lote</th>
+    <th class="l">Inserto</th><th class="l">Cliente</th><th>Op</th><th class="l">Proceso</th><th class="l">Centro</th><th>Min prep/lote</th><th>Lote</th>
     <th>Min MO/u</th><th>N° op.</th><th>% retrab.</th><th>% merma</th><th>Costo total/u</th><th class="l">Estado</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
     <button class="rowbtn" onclick="app.addRuta()">+ Agregar operación</button>
@@ -2426,6 +2434,7 @@ const app={
         save(); renderKPIs(); renderChain(); renderSection("mes"); toast(nombreMes(k)+" borrado");
       });
     },"Borrar mes"); },
+  setCliRuta(v){ cliVista=v; rutaFilter="(todos)"; renderSection("ruta"); },
   setCliVista(v){ cliVista=v; renderSection(current); },
   setCliDiagrama(v){ cliVista=v; const l=S.inserts.filter(pasaCliente); if(l.length&&!l.some(x=>String(x.id)===String(disenoSel))) disenoSel=String(l[0].id); renderSection("diagrama"); },
   abrirAcceso(){

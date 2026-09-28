@@ -369,7 +369,7 @@ const DEFAULTS={
   ],
   perInsert:{ /* id -> {mermaMat, margenObj(null=default), garantia} */ },
   presupuesto:{otrosFijos:0,meta:null},
-  periodos:{}, periodoActivo:null, clientes:[],
+  periodos:{}, periodoActivo:null, periodoVista:"catalogo", clientes:[],
   ruta:[
     {ins:"160143",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
     {ins:"160145",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
@@ -472,10 +472,12 @@ function compute(){
   R.factorTC=f("tc"); R.tc=num(S.control.tcBase)*R.factorTC;
   // Capacidad
   const cap=S.capacidad;
-  R.capTeorica=num(cap.dias)*num(cap.turnos)*num(cap.horas);
-  R.capBase=(num(cap.dias)-num(cap.festivos)-num(cap.vacaciones))*num(cap.turnos)*(num(cap.horas)-num(cap.comida));
-  R.capPractica=Math.max(0, R.capBase*(1-num(cap.ausentismo))-num(cap.mantenimiento)-num(cap.setups)-num(cap.paros));
-  R.horasUsadas = (cap.horasUsadas==null||cap.horasUsadas==="")?null:num(cap.horasUsadas)*f("utilizacion");
+  const capv=c=>valPeriodo("capacidad",c,cap[c]);
+  R.capTeorica=num(capv("dias"))*num(capv("turnos"))*num(capv("horas"));
+  R.capBase=(num(capv("dias"))-num(capv("festivos"))-num(capv("vacaciones")))*num(capv("turnos"))*(num(capv("horas"))-num(capv("comida")));
+  R.capPractica=Math.max(0, R.capBase*(1-num(capv("ausentismo")))-num(capv("mantenimiento"))-num(capv("setups"))-num(capv("paros")));
+  const hu=capv("horasUsadas");
+  R.horasUsadas = (hu==null||hu==="")?null:num(hu)*f("utilizacion");
   R.ociosa = R.horasUsadas==null?null:(R.capPractica-R.horasUsadas);
   R.utilPct = (R.horasUsadas==null||R.capPractica<=0)?null:R.horasUsadas/R.capPractica;
   // Mano de obra
@@ -483,10 +485,11 @@ function compute(){
   R.provAgui=num(p.aguinaldoDias)/365; R.provVac=(num(p.vacDias)*num(p.primaVac))/365;
   R.cargaTotal=num(p.isn)+num(p.infonavit)+num(p.imss)+R.provAgui+R.provVac+num(p.otros);
   R.factorEmpresa=1+R.cargaTotal; R.factorNomina=f("nomina");
-  R.emp=S.empleados.map(e=>{
-    const bruto=(e.period==="Semanal"?num(e.sueldo)*num(p.semanas):num(e.sueldo))*num(e.n);
+  R.emp=S.empleados.map((e,ei)=>{
+    const sv=valPeriodo("mano","e"+ei+".sueldo",e.sueldo), nv=valPeriodo("mano","e"+ei+".n",e.n);
+    const bruto=(e.period==="Semanal"?num(sv)*num(p.semanas):num(sv))*num(nv);
     const costo=(bruto*R.factorEmpresa+num(e.uniformes)+num(e.capacitacion))*R.factorNomina;
-    const horas=R.capPractica*(1-num(e.ausent))*num(e.n);
+    const horas=R.capPractica*(1-num(e.ausent))*num(nv);
     return {...e,bruto,costo,horas,tarifa:horas>0?costo/horas:null};
   });
   R.moDirecta=R.emp.filter(e=>e.tipo==="Directa").reduce((a,e)=>a+e.costo,0);
@@ -501,17 +504,19 @@ function compute(){
   });
   R.maqTotal=R.maq.reduce((a,m)=>a+m.costo,0);
   // Indirectos por clasificación
-  const byClass=cl=>S.indirectos.filter(i=>i.cl===cl).reduce((a,i)=>a+num(i.m),0);
+  const byClass=cl=>S.indirectos.filter(i=>i.cl===cl).reduce((a,i)=>a+montoIndirecto(i),0);
   R.indVar=byClass("Indirecto variable")*f("consumibles"); R.indFijo=byClass("Indirecto fijo");
   R.indFabril=R.indVar+R.indFijo;
   R.indAdmin=byClass("Administrativo"); R.indComercial=byClass("Comercial");
   R.indLog=byClass("Logístico")*f("flete"); R.indFin=byClass("Financiero"); R.indDir=byClass("Directo");
   // Energía
   const en=S.energia;
+  const ev=c=>valPeriodo("energia",c,en[c]);
   R.consumo=en.cargas.reduce((a,c)=>a+num(c.kw)*num(c.h),0);
-  R.enConsumo=R.consumo*num(en.precio); R.enDemanda=0; R.enFijo=num(en.cargoFijo);
+  R.enConsumo=R.consumo*num(ev("precio")); R.enDemanda=0; R.enFijo=num(ev("cargoFijo"));
   R.enEstimada=R.enConsumo+R.enFijo;
-  const recibo=(en.reciboReal==null||en.reciboReal==="")?null:num(en.reciboReal);
+  const rr=ev("reciboReal");
+  const recibo=(rr==null||rr==="")?null:num(rr);
   R.energiaSubtotal=(recibo!=null?recibo:R.enEstimada)*f("energia");
   // Pool y tasa
   R.pool=R.energiaSubtotal+R.moDirecta+R.maqTotal+R.indFabril;
@@ -563,6 +568,7 @@ function compute(){
   R.pctComercial=R.pool>0?(R.indComercial+R.moComercial)/R.pool:0;
   R.pctLog=R.pool>0?R.indLog/R.pool:0;
   // Costeo integral
+  const getVolVista=volPeriodo(S.periodoVista||"catalogo");
   R.integral=S.inserts.map(ins=>{
     const pi=S.perInsert[ins.id]||{};
     const mermaMat=num(pi.mermaMat)*f("merma");
@@ -592,7 +598,7 @@ function compute(){
       else if(margenReal<margenObj){luz="a";estado="Amarillo · bajo objetivo";}
       else {luz="v";estado="Verde · cumple objetivo";}
     }
-    const vol=num((S.perInsert[ins.id]||{}).volumen)*f("volumen");
+    const vol=getVolVista(String(ins.id))*f("volumen");
     const contribUnit=precioClMXN-materialMXN;
     return {ins,mermaMat,materialUSD,materialMXN,mo:a.mo,maq:a.maq,ind:a.ind,conversion,costoManuf,
       admin,comercial,logistica,financiamiento,garantiaMXN,costoIntegral,margenObj,precioSug,
@@ -788,6 +794,7 @@ function renderChain(){
   const R=compute();
   const chips=[
     ["Escenario",S.control.escenario],
+    ["Periodo",etiquetaPeriodo(S.periodoVista||"catalogo")],
     ["TC efectivo",fN(R.tc,4)],
     ["Capacidad",fN(R.capPractica,0)+" h"],
     ["Pool",fMXN0(R.pool)],
@@ -820,7 +827,8 @@ function secResumen(R){
     <td class="l"><span class="lz ${i.luz}"><span class="b"></span>${i.estado}</span></td></tr>`).join("");
   return head("Resumen del costeo","COSTEO_INTEGRAL · CONTROL · VALIDACION",
     "Vista de todos los insertos con su costo integral, precio y semáforo. Cambia cualquier dato en las demás secciones y estos indicadores se recalculan en cadena. Sin tiempos de ruta, el inserto queda como <b>costeo incompleto</b> y no genera precio válido.")
-    +`<div class="scroll"><table><thead><tr>
+    +`<div class="filterbar">${periodoSelector()}<span class="hint">Consultando: <b>${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))}</b></span></div>
+    <div class="scroll"><table><thead><tr>
       <th class="l">Inserto</th><th>Material (USD)</th><th>Material (MXN)</th><th>Conversión</th>
       <th>Costo integral</th><th>Precio sugerido</th><th>Precio cliente</th><th>Utilidad/pza</th>
       <th>Margen real</th><th>Markup</th><th class="l">Semáforo</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -917,17 +925,18 @@ function secCapacidad(R){
     ["ausentismo","Ausentismo","%"],["mantenimiento","Mantenimiento programado","h/mes"],
     ["setups","Preparaciones / setups","h/mes"],["paros","Paros no programados","h/mes"]
   ];
-  const irows=rows.map(([k,lab,u])=>`<tr><td class="l">${lab}</td>
-    <td>${inp("capacidad."+k,{pct:u==="%"})}<span class="unit">${u}</span></td></tr>`).join("");
+  const irows=rows.map(([kk,lab,u])=>`<tr><td class="l">${lab}</td>
+    <td>${perInput("capacidad",kk,"capacidad."+kk,{pct:u==="%"})}<span class="unit">${u}</span></td></tr>`).join("");
   return head("Capacidad práctica","CAPACIDAD",
     "Sustituye el viejo factor fijo de 85%. La capacidad práctica es el denominador de todas las tarifas. La capacidad ociosa se muestra aparte y no se reparte entre productos.")
-  +`<div class="grid2">
+  +`<div class="filterbar">${periodoSelector()}<span class="hint">${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))} — ${avisoPeriodo()}</span></div>
+    <div class="grid2">
     <div class="card"><h3>Tiempo disponible</h3><div class="pad"><table>${irows}</table></div></div>
     <div class="card"><h3>Capacidad resultante</h3><div class="pad"><table>
       <tr><td class="l">Capacidad teórica</td><td class="mono val-calc">${fN(R.capTeorica,0)}<span class="unit">h/mes</span></td></tr>
       <tr><td class="l">Horas productivas base</td><td class="mono val-calc">${fN(R.capBase,0)}<span class="unit">h/mes</span></td></tr>
       <tr class="total"><td class="l">Capacidad práctica</td><td class="mono">${fN(R.capPractica,0)}<span class="unit">h/mes</span></td></tr>
-      <tr><td class="l">Horas utilizadas <span class="hint">(captura)</span></td><td>${inp("capacidad.horasUsadas",{ph:"PENDIENTE"})}</td></tr>
+      <tr><td class="l">Horas utilizadas <span class="hint">(captura)</span></td><td>${perInput("capacidad","horasUsadas","capacidad.horasUsadas",{ph:"PENDIENTE"})}</td></tr>
       <tr><td class="l">Capacidad ociosa</td><td class="mono val-calc">${R.ociosa==null?'<span class="val-pend">PENDIENTE</span>':fN(R.ociosa,0)+' h'}</td></tr>
       <tr><td class="l">% de utilización</td><td class="mono val-calc">${R.utilPct==null?'<span class="val-pend">PENDIENTE</span>':fPct(R.utilPct)}</td></tr>
     </table></div></div>
@@ -948,15 +957,16 @@ function secMano(R){
     <td class="l">${sel(`empleados.${i}.tipo`,TIPOS)}</td>
     <td class="l">${centroSel(`empleados.${i}.centro`)}</td>
     <td class="l">${sel(`empleados.${i}.period`,PERIOD)}</td>
-    <td>${inp(`empleados.${i}.sueldo`,{ph:"—"})}</td>
-    <td>${inp(`empleados.${i}.n`,{width:""})}</td>
+    <td>${perInput("mano","e"+i+".sueldo",`empleados.${i}.sueldo`,{ph:"—"})}</td>
+    <td>${perInput("mano","e"+i+".n",`empleados.${i}.n`,{dec:0})}</td>
     <td class="mono val-calc">${fMXN0(e.bruto)}</td>
     <td class="mono val-calc">${fMXN0(e.costo)}</td>
     <td class="mono val-calc">${e.tarifa==null?'—':fMXN(e.tarifa)+'/h'}</td>
     <td><button class="del" onclick="app.delRow('empleados',${i})">✕</button></td></tr>`).join("");
   return head("Mano de obra","MANO_OBRA",
     "Sustituye el factor 1.35 por cargas patronales explícitas. El costo-empresa por hora = costo mensual ÷ horas productivas. Los % de ley son supuestos: confírmalos con tu contador.")
-  +`<div class="grid2">
+  +`<div class="filterbar">${periodoSelector()}<span class="hint">${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))} — sueldos y número de personas por periodo; ${avisoPeriodo()}</span></div>
+    <div class="grid2">
     <div class="card"><h3>Cargas patronales</h3><div class="pad"><table>${prows}
       <tr class="sub"><td class="l">Provisión aguinaldo</td><td class="mono">${fPct(R.provAgui)}</td></tr>
       <tr class="sub"><td class="l">Provisión vacaciones + prima</td><td class="mono">${fPct(R.provVac)}</td></tr>
@@ -978,16 +988,29 @@ function secMano(R){
 
 
 /* ---------- INDIRECTOS ---------- */
+function indMontoInput(i,it){
+  const k=S.periodoVista||"catalogo"; const v=montoIndirecto(it,k);
+  if(!indirectoEditable()) return `<span class="mono val-calc" title="Promedio de los meses capturados">${fMXN(v)}</span>`;
+  if(k==="catalogo") return inp(`indirectos.${i}.m`,{ph:"—"});
+  const P=ensurePeriodo(k); const id=indKey(it);
+  const ov=(P.indirectos||{})[id];
+  const disp=(ov===undefined||ov===null||ov==="")?"":ov;
+  return `<input class="f" type="number" step="any" data-ind="${escapeHtml(id)}" value="${disp}" placeholder="${it.m==null?'0':num(it.m)}">`;
+}
 function secIndirectos(R){
   const rows=S.indirectos.map((it,i)=>`<tr>
     <td class="l">${inp(`indirectos.${i}.c`,{type:"text",cls:"txt wide"})}</td>
     <td class="l">${sel(`indirectos.${i}.cl`,CLASES)}</td>
     <td class="l">${centroSel(`indirectos.${i}.ce`)}</td>
-    <td>${inp(`indirectos.${i}.m`,{ph:"—"})}</td>
+    <td>${indMontoInput(i,it)}</td>
+    <td class="mono val-calc" title="Monto del catálogo (base)">${it.m==null||it.m===""?'<span class="hint">—</span>':fMXN(num(it.m))}</td>
     <td><button class="del" onclick="app.delRow('indirectos',${i})">✕</button></td></tr>`).join("");
   return head("Indirectos y gastos","INDIRECTOS",
-    "La clasificación decide a dónde va cada gasto: los fabriles entran a la tasa de manufactura; administración, comercial, logística y financiero se aplican en el costo integral.")
-  +`<div class="scroll"><table><thead><tr><th class="l">Concepto</th><th class="l">Clasificación</th><th class="l">Centro</th><th>$/mes</th><th></th></tr></thead>
+    "La clasificación decide a dónde va cada gasto: los fabriles entran a la tasa de manufactura; administración, comercial, logística y financiero se aplican en el costo integral. Los conceptos son fijos, pero <b>el monto se captura por mes</b>: elige el periodo y ajusta lo que cambió; lo que dejes en blanco toma el valor del catálogo.")
+  +`<div class="filterbar">${periodoSelector()}
+      <span class="hint">Montos de <b>${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))}</b>${(S.periodoVista||"catalogo")==="catalogo"?" — valores base del catálogo":(indirectoEditable()?" — captura el monto del mes; en blanco usa el del catálogo":" — promedio de los meses capturados")}</span>
+      ${indirectoEditable()&&(S.periodoVista||"catalogo")!=="catalogo"?`<button class="rowbtn" style="margin:0" onclick="app.indCopiarBase()">Copiar montos del catálogo</button><button class="rowbtn" style="margin:0" onclick="app.indLimpiarMes()">Limpiar mes</button>`:""}</div>
+    <div class="scroll"><table><thead><tr><th class="l">Concepto</th><th class="l">Clasificación</th><th class="l">Centro</th><th>$/mes${(S.periodoVista||"catalogo")==="catalogo"?"":" del periodo"}</th><th>Base<br>catálogo</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>
     <button class="rowbtn" onclick="app.addInd()">+ Agregar concepto</button>
     <div class="grid2" style="margin-top:16px">
@@ -1018,11 +1041,12 @@ function secEnergia(R){
     <td><button class="del" onclick="app.delRow('energia.cargas',${i})">✕</button></td></tr>`).join("");
   return head("Energía y pool de manufactura","COSTEO_MANUFACTURA",
     "Tarifa comercial de baja tensión (PDBT): sólo cargo por consumo ($/kWh) + cargo fijo, sin cargo por demanda (eso aplica a media tensión con subestación). La base principal debe ser el recibo real de CFE; la estimación por potencia×horas es sólo validación. El pool reúne energía + MO directa + indirectos fabriles y define la tasa de planta.")
-  +`<div class="grid2">
+  +`<div class="filterbar">${periodoSelector()}<span class="hint">${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))} — ${avisoPeriodo()}</span></div>
+    <div class="grid2">
     <div class="card"><h3>Parámetros de energía · CFE tarifa comercial baja tensión (PDBT)</h3><div class="pad"><table>
-      <tr><td class="l">Precio de energía (tarifa comercial PDBT)</td><td>${inp("energia.precio")}<span class="unit">$/kWh</span></td></tr>
-      <tr><td class="l">Cargo fijo mensual</td><td>${inp("energia.cargoFijo")}</td></tr>
-      <tr><td class="l">Costo real de recibo CFE <span class="hint">(base principal)</span></td><td>${inp("energia.reciboReal",{ph:"PENDIENTE"})}</td></tr>
+      <tr><td class="l">Precio de energía (tarifa comercial PDBT)</td><td>${perInput("energia","precio","energia.precio")}<span class="unit">$/kWh</span></td></tr>
+      <tr><td class="l">Cargo fijo mensual</td><td>${perInput("energia","cargoFijo","energia.cargoFijo")}</td></tr>
+      <tr><td class="l">Costo real de recibo CFE <span class="hint">(base principal)</span></td><td>${perInput("energia","reciboReal","energia.reciboReal",{ph:"PENDIENTE"})}</td></tr>
     </table></div></div>
     <div class="card"><h3>Resumen de energía</h3><div class="pad"><table>
       <tr><td class="l">Consumo estimado</td><td class="mono val-calc">${fN(R.consumo,0)}<span class="unit">kWh</span></td></tr>
@@ -1145,7 +1169,7 @@ function secIntegral(R){
   }).join("");
   return head("Costeo integral por inserto","COSTEO_INTEGRAL",
     "Material y precio cliente se conservan de cada inserto (azul, editable). La conversión viene de la ruta con tarifas por centro. Admin/comercial/logística se aplican sobre la conversión; financiamiento y garantías sobre el costo previo. Margen sobre venta ≠ markup.")
-  +`<div class="filterbar"><span class="hint">${R.integral.length} insertos en la lista · ${R.readyCount} costeados. Pasa el cursor sobre <b>Gastos op.</b> para ver el desglose y sobre <b>Margen</b> para el markup.</span></div>
+  +`<div class="filterbar">${periodoSelector()}<span class="hint">${R.integral.length} insertos en la lista · ${R.readyCount} costeados. Pasa el cursor sobre <b>Gastos op.</b> para ver el desglose y sobre <b>Margen</b> para el markup.</span></div>
     <div class="tabla-integral"><table class="compact"><thead><tr>
     <th class="l">Inserto</th><th>Vol.<br>mensual</th><th>Mat.<br>(USD)</th><th>%<br>Merma</th><th>Material<br>(MXN)</th>
     <th>Conversión<br>(MXN)</th><th>Gastos op.<br>(MXN)</th><th>Costo<br>integral</th>
@@ -1190,6 +1214,22 @@ function ensureClientes(){
 function sortInserts(){
   S.inserts.sort((a,b)=>String(a.id==null?"":a.id).localeCompare(String(b.id==null?"":b.id),undefined,{numeric:true,sensitivity:"base"}));
 }
+document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||el.dataset.ov===undefined) return;
+  const [grupo,clave]=String(el.dataset.ov).split("|");
+  let v=null;
+  if(el.value!==""){ v=parseFloat(el.value); if(el.dataset.pct==="1") v=v/100; }
+  setValPeriodo(grupo,clave,v);
+  save(); renderKPIs(); renderChain(); renderSection(current);
+});
+document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||el.dataset.ind===undefined) return;
+  const k=S.periodoVista||"catalogo"; if(k==="catalogo") return;
+  const P=ensurePeriodo(k); if(!P.indirectos) P.indirectos={};
+  if(el.value==="") delete P.indirectos[el.dataset.ind];
+  else P.indirectos[el.dataset.ind]=parseFloat(el.value);
+  save(); renderKPIs(); renderChain(); renderSection("indirectos");
+});
 document.addEventListener("change",e=>{
   const el=e.target; if(!el.dataset||el.dataset.mes===undefined) return;
   const P=ensurePeriodo(periodoKey()); const id=el.dataset.mes;
@@ -1703,6 +1743,7 @@ function secDashboard(R){
           ${["Base","Conservador","Estrés"].map(s=>`<button class="${s===scn?'on':''}" onclick="app.setEscenario('${s}')">${s}</button>`).join("")}
         </div>
       </div>
+      ${periodoSelector()}
       <span class="hint" style="margin-left:auto">${new Date().toLocaleDateString("es-MX",{day:'2-digit',month:'long',year:'numeric'})}</span>
     </div>
     <p class="lead">Indicadores para toma de decisiones. Cambia el escenario y todo se recalcula en vivo: úsalo proyectado en la junta para comparar Base, Conservador y Estrés.</p>
@@ -1849,6 +1890,69 @@ function etiquetaPeriodo(key){
   if(String(key).startsWith("anio:")) return "Año "+String(key).slice(5);
   return nombreMes(key);
 }
+function valPeriodo(grupo,clave,base){
+  const k=S.periodoVista||"catalogo";
+  const nn=v=>(v===undefined||v===null||v==="")?null:num(v);
+  const get=mk=>{ const P=(S.periodos||{})[mk]; const g=P&&P[grupo]; return g?nn(g[clave]):null; };
+  if(!k||k==="catalogo") return base;
+  if(String(k).indexOf("anio:")===0){
+    const ms=mesesDe(String(k).slice(5)); if(!ms.length) return base;
+    const bs=nn(base);
+    const vals=ms.map(mk=>{ const v=get(mk); return v==null?bs:v; }).filter(v=>v!=null);
+    if(!vals.length) return base;
+    return vals.reduce((a,b)=>a+b,0)/vals.length;
+  }
+  const v=get(k); return v==null?base:v;
+}
+function setValPeriodo(grupo,clave,valor){
+  const k=S.periodoVista||"catalogo"; if(k==="catalogo"||String(k).indexOf("anio:")===0) return false;
+  const P=ensurePeriodo(k); if(!P[grupo]) P[grupo]={};
+  if(valor===null||valor==="") delete P[grupo][clave]; else P[grupo][clave]=valor;
+  return true;
+}
+function periodoEditable(){ const k=S.periodoVista||"catalogo"; return String(k).indexOf("anio:")!==0; }
+function indKey(it){ return String((it&&it.c)||"").trim(); }
+function mesesDe(y){ return Object.keys(S.periodos||{}).filter(k=>k.indexOf(y+"-")===0).sort(); }
+function montoIndirecto(it,key){
+  const k=(key!==undefined)?key:(S.periodoVista||"catalogo");
+  const base=num(it.m), id=indKey(it);
+  const ovMes=mk=>{ const P=(S.periodos||{})[mk]; const o=P&&P.indirectos&&P.indirectos[id];
+                    return (o===undefined||o===null||o==="")?null:num(o); };
+  if(!k||k==="catalogo") return base;
+  if(String(k).indexOf("anio:")===0){
+    const ms=mesesDe(String(k).slice(5));
+    if(!ms.length) return base;
+    return ms.reduce((a,mk)=>{const v=ovMes(mk); return a+(v==null?base:v);},0)/ms.length;
+  }
+  const v=ovMes(k); return v==null?base:v;
+}
+function indirectoEditable(){ const k=S.periodoVista||"catalogo"; return String(k).indexOf("anio:")!==0; }
+function perInput(grupo,clave,basePath,opts){
+  opts=opts||{};
+  const k=S.periodoVista||"catalogo";
+  if(k==="catalogo") return inp(basePath,opts);
+  const base=getPath(basePath);
+  const val=valPeriodo(grupo,clave,base);
+  if(!periodoEditable()) return `<span class="mono val-calc" title="Promedio de los meses capturados">${opts.pct?fPct(val):(val==null?'<span class="hint">—</span>':fN(num(val),opts.dec===undefined?2:opts.dec))}</span>`;
+  const P=ensurePeriodo(k); const g=P[grupo]||{}; const ov=g[clave];
+  let disp=(ov===undefined||ov===null||ov==="")?"":ov;
+  if(opts.pct&&disp!=="") disp=+disp*100;
+  let ph=(base==null||base==="")?(opts.ph||"0"):String(opts.pct?+base*100:base);
+  return `<input class="f" type="number" step="any" data-ov="${escapeHtml(grupo)}|${escapeHtml(clave)}" data-pct="${opts.pct?1:0}" value="${disp}" placeholder="${escapeHtml(ph)}">`;
+}
+function avisoPeriodo(){
+  const k=S.periodoVista||"catalogo";
+  if(k==="catalogo") return "valores base del catálogo";
+  if(!periodoEditable()) return "promedio de los meses capturados (solo lectura)";
+  return "captura el valor de este mes; en blanco usa el del catálogo";
+}
+function periodoSelector(){
+  const cur=S.periodoVista||"catalogo";
+  return `<div class="exsel" style="display:inline-flex"><span>Periodo</span>
+    <select onchange="app.setPeriodoVista(this.value)">
+      ${listaPeriodos().map(o=>`<option value="${escapeHtml(o.v)}" ${cur===o.v?'selected':''}>${escapeHtml(o.t)}</option>`).join("")}
+    </select></div>`;
+}
 function listaPeriodos(){
   const ks=Object.keys(S.periodos||{}).filter(k=>/^\d{4}-\d{2}$/.test(k)).sort().reverse();
   const anios=[...new Set(ks.map(k=>k.slice(0,4)))].sort().reverse();
@@ -1861,7 +1965,7 @@ function avgContribRatio(R){
   return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
 }
 function computePresupuesto(R,pk){
-  const key=(pk!==undefined)?pk:((S.presupuesto&&S.presupuesto.periodo)||"catalogo");
+  const key=(pk!==undefined)?pk:(S.periodoVista||"catalogo");
   const gfManuf=R.pool, gfAdmin=R.indAdmin+R.moAdmin, gfComer=R.indComercial+R.moComercial,
         gfLog=R.indLog, gfFin=R.indFin, otros=num(S.presupuesto.otrosFijos);
   const GF=gfManuf+gfAdmin+gfComer+gfLog+gfFin+otros;
@@ -1869,7 +1973,8 @@ function computePresupuesto(R,pk){
   const esAnio=String(key).indexOf("anio:")===0;
   const meses=esAnio?Math.max(1,Object.keys(S.periodos||{}).filter(k=>k.indexOf(String(key).slice(5)+"-")===0).length):1;
   let ventas=0, matMes=0;
-  R.integral.forEach(i=>{ const v=getVol(String(i.ins.id)); ventas+=i.precioClMXN*v; matMes+=i.materialMXN*v; });
+  const fv=f("volumen");
+  R.integral.forEach(i=>{ const v=getVol(String(i.ins.id))*fv; ventas+=i.precioClMXN*v; matMes+=i.materialMXN*v; });
   const contribMes=ventas-matMes;
   const conVol=ventas>0;
   const ratio=conVol?(ventas>0?contribMes/ventas:0):avgContribRatio(R);
@@ -1922,10 +2027,7 @@ function secPresupuesto(R){
   return head("Presupuesto y punto de equilibrio","ESTADO DE RESULTADOS · EQUILIBRIO",
     "Hoja financiera de la empresa. El costo variable es el material; la mano de obra y los indirectos se tratan como gastos fijos del periodo. Punto de equilibrio = gastos fijos ÷ margen de contribución. Consulta cualquier mes trabajado o el acumulado de un año.")
   +`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-      <div class="exsel" style="display:inline-flex"><span>Consultar periodo</span>
-        <select onchange="app.setPresuPeriodo(this.value)">
-          ${listaPeriodos().map(o=>`<option value="${escapeHtml(o.v)}" ${String(P.key)===o.v?'selected':''}>${escapeHtml(o.t)}</option>`).join("")}
-        </select></div>
+      ${periodoSelector()}
       <span class="hint">${escapeHtml(P.etiqueta)}${P.meses>1?(" · "+P.meses+" meses acumulados"):""}${P.conVol?"":" · sin volúmenes capturados en este periodo"}</span>
     </div>
     <div class="hero">
@@ -2233,7 +2335,16 @@ const app={
     save(); renderSection("placas"); toast("Cliente "+v+" asignado a "+disenoSel);
   },
   setCliFiltro(v){ cliFiltro=v; renderSection("mes"); },
-  setPresuPeriodo(v){ if(!S.presupuesto) S.presupuesto={}; S.presupuesto.periodo=v; save(); renderKPIs(); renderChain(); renderSection("presupuesto"); },
+  indCopiarBase(){ const k=S.periodoVista||"catalogo"; if(k==="catalogo") return;
+    const P=ensurePeriodo(k); P.indirectos=P.indirectos||{};
+    S.indirectos.forEach(it=>{ if(it.m!=null&&it.m!=="") P.indirectos[indKey(it)]=num(it.m); });
+    save(); renderKPIs(); renderChain(); renderSection("indirectos"); toast("Montos del catálogo copiados a "+etiquetaPeriodo(k)); },
+  indLimpiarMes(){ const k=S.periodoVista||"catalogo"; if(k==="catalogo") return;
+    askConfirm("¿Limpiar los montos capturados de <b>"+etiquetaPeriodo(k)+"</b>? Volverán a tomar el valor del catálogo.",()=>{
+      const P=ensurePeriodo(k); P.indirectos={}; save(); renderKPIs(); renderChain(); renderSection("indirectos"); toast("Montos del mes limpiados");
+    },"Limpiar"); },
+  setPeriodoVista(v){ S.periodoVista=v||"catalogo"; save(); renderKPIs(); renderChain(); renderSection(current); toast("Consultando "+etiquetaPeriodo(S.periodoVista)); },
+  setPresuPeriodo(v){ S.periodoVista=v||"catalogo"; save(); renderKPIs(); renderChain(); renderSection("presupuesto"); },
   setPeriodo(v){ if(!v) return; S.periodoActivo=v; ensurePeriodo(v); save(); renderSection("mes"); },
   mesTodos(v){ const P=ensurePeriodo(periodoKey()); S.inserts.forEach(i=>{ const id=String(i.id); if(!P.items[id])P.items[id]={}; P.items[id].inc=v; }); save(); renderSection("mes"); },
   mesCopiarVol(){ const P=ensurePeriodo(periodoKey()); let n=0;

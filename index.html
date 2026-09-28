@@ -369,7 +369,7 @@ const DEFAULTS={
   ],
   perInsert:{ /* id -> {mermaMat, margenObj(null=default), garantia} */ },
   presupuesto:{otrosFijos:0,meta:null},
-  periodos:{}, periodoActivo:null,
+  periodos:{}, periodoActivo:null, clientes:[],
   ruta:[
     {ins:"160143",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
     {ins:"160145",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
@@ -387,6 +387,7 @@ const KEY="northfoam_costeo_v2";
 let S=load();
 ensureEscenarios();
 migrateCentros();
+ensureClientes();
 sortInserts();
 function clone(o){return JSON.parse(JSON.stringify(o))}
 function load(){
@@ -745,20 +746,20 @@ document.addEventListener("input",e=>{ if(e.target.dataset&&e.target.dataset.pat
 /* ===================== SECCIONES ===================== */
 const SECTIONS=[
   {id:"dashboard",ix:"01",name:"Panel ejecutivo"},
-  {id:"mes",ix:"02",name:"Costeo mensual"},
-  {id:"presupuesto",ix:"03",name:"Presupuesto y equilibrio"},
-  {id:"resumen",ix:"04",name:"Resumen"},
-  {id:"control",ix:"05",name:"Control y escenarios"},
-  {id:"capacidad",ix:"06",name:"Capacidad"},
-  {id:"mano",ix:"07",name:"Mano de obra"},
-  {id:"indirectos",ix:"08",name:"Indirectos"},
-  {id:"energia",ix:"09",name:"Energía y pool"},
-  {id:"centros",ix:"10",name:"Centros de costo"},
-  {id:"ruta",ix:"11",name:"Ruta de proceso"},
-  {id:"financiero",ix:"12",name:"Costo financiero"},
-  {id:"integral",ix:"13",name:"Costeo integral"},
-  {id:"placas",ix:"14",name:"Costeo de placas"},
-  {id:"diagrama",ix:"15",name:"Diagrama de corte"},
+  {id:"presupuesto",ix:"02",name:"Presupuesto y equilibrio"},
+  {id:"resumen",ix:"03",name:"Resumen"},
+  {id:"control",ix:"04",name:"Control y escenarios"},
+  {id:"capacidad",ix:"05",name:"Capacidad"},
+  {id:"mano",ix:"06",name:"Mano de obra"},
+  {id:"indirectos",ix:"07",name:"Indirectos"},
+  {id:"energia",ix:"08",name:"Energía y pool"},
+  {id:"centros",ix:"09",name:"Centros de costo"},
+  {id:"ruta",ix:"10",name:"Ruta de proceso"},
+  {id:"financiero",ix:"11",name:"Costo financiero"},
+  {id:"integral",ix:"12",name:"Costeo integral"},
+  {id:"placas",ix:"13",name:"Costeo de placas"},
+  {id:"diagrama",ix:"14",name:"Diagrama de corte"},
+  {id:"mes",ix:"15",name:"Costeo mensual"},
   {id:"validacion",ix:"16",name:"Validación"}
 ];
 let current="dashboard";
@@ -1175,6 +1176,17 @@ function nextInsId(){
   const ids=new Set(S.inserts.map(x=>String(x.id))); let n=1;
   while(ids.has("NUEVO-"+n)) n++; return "NUEVO-"+n;
 }
+function clienteDe(ins){ return (ins&&ins.cliente)?String(ins.cliente).trim():""; }
+function clienteLabel(ins){ return clienteDe(ins)||"Sin cliente"; }
+function ensureClientes(){
+  if(!Array.isArray(S.clientes)) S.clientes=[];
+  // migrar clientes capturados antes en perInsert
+  S.inserts.forEach(i=>{ const pc=(S.perInsert[String(i.id)]||{}).cliente;
+    if(pc&&!i.cliente){ i.cliente=String(pc).trim(); }
+    if((S.perInsert[String(i.id)]||{}).cliente) delete S.perInsert[String(i.id)].cliente; });
+  S.inserts.forEach(i=>{ const c=clienteDe(i); if(c&&!S.clientes.includes(c)) S.clientes.push(c); });
+  S.clientes.sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+}
 function sortInserts(){
   S.inserts.sort((a,b)=>String(a.id==null?"":a.id).localeCompare(String(b.id==null?"":b.id),undefined,{numeric:true,sensitivity:"base"}));
 }
@@ -1212,7 +1224,8 @@ document.addEventListener("change",e=>{
   const el=e.target; if(!el.dataset||!el.dataset.per) return;
   const id=el.dataset.per, field=el.dataset.field;
   if(!S.perInsert[id]) S.perInsert[id]={};
-  if(el.value===""){ S.perInsert[id][field]=null; }
+  if(el.dataset.txt==="1"){ S.perInsert[id][field]=el.value.trim()||null; }
+  else if(el.value===""){ S.perInsert[id][field]=null; }
   else { let val=parseFloat(el.value); if(el.dataset.pct==="1") val=val/100; S.perInsert[id][field]=val; }
   save(); renderKPIs(); renderChain(); renderSection(current);
 });
@@ -1259,63 +1272,7 @@ function secDiseno(R){
     <td class="mono val-calc" style="font-weight:700">${fUSD(p.costoInserto)}</td>
     <td><button class="del" onclick="app.delPieza(${idx},${j})">✕</button></td></tr>`).join("");
 
-  const q26=num(ins.q26), matUSD=dz.totalUSD, util=q26-matUSD;
-  // Requerimiento de material por cantidad terminada
-  const Q=num(ins.diseno.qDeseada);
-  const reqPiezas=dz.piezas.map(p=>{
-    const piezasTot=num(p.cant)*Q;
-    const placasFrac=p.ppp>0?piezasTot/p.ppp:0;
-    const placas=Math.ceil(placasFrac-1e-9);
-    return {...p,piezasTot,placasFrac,placas};
-  });
-  const matReq=[0,1,2].map(k=>{
-    const eff=dz.mats[k]||matEff({});
-    const rows=reqPiezas.filter(p=>(num(p.mat)||1)-1===k);
-    if(!rows.length||!(eff.precio>0)) return null;
-    const placasFrac=rows.reduce((a,p)=>a+p.placasFrac,0);
-    const placasComprar=Math.ceil(placasFrac-1e-9);
-    return {k,nombre:eff.nombre||("M"+(k+1)),precio:eff.precio,placasFrac,placasComprar,
-      costoTeorico:rows.reduce((a,p)=>a+p.costoInserto,0)*Q, costoPlacas:placasComprar*eff.precio};
-  }).filter(Boolean);
-  const totalTeorico=matUSD*Q, totalPlacas=matReq.reduce((a,m)=>a+m.costoPlacas,0);
-  const precioMXN=num(it.precioClMXN), costoIntMXN=num(it.costoIntegral), completeIt=!!it.complete;
-  const ingresoTot=precioMXN*Q, utilIntTot=completeIt?num(it.utilidad)*Q:null;
-  const contribTot=(precioMXN-num(it.materialMXN))*Q;
-  const reqPzRows=reqPiezas.map(p=>`<tr>
-    <td class="l">${escapeHtml(String(p.comp||''))}</td><td class="mono">M${p.mat||1}</td>
-    <td class="mono">${fN(num(p.cant),0)}</td><td class="mono val-calc" style="font-weight:600">${fN(p.piezasTot,0)}</td>
-    <td class="mono">${p.ppp}</td><td class="mono val-calc">${fN(p.placasFrac,2)}</td>
-    <td class="mono val-calc" style="font-weight:600">${p.placas}</td></tr>`).join("");
-  const reqMatRows=matReq.map(m=>`<tr>
-    <td class="l">${escapeHtml(m.nombre)}</td><td class="mono val-calc">${fN(m.placasFrac,2)}</td>
-    <td class="mono val-calc" style="font-weight:600">${m.placasComprar}</td>
-    <td class="mono">${fUSD(m.precio)}</td><td class="mono val-calc">${fUSD(m.costoTeorico)}</td>
-    <td class="mono val-calc" style="font-weight:600">${fUSD(m.costoPlacas)}</td></tr>`).join("");
-  const reqBlock = Q>0 ? `
-    <div class="grid2" style="margin-top:0">
-      <div class="card"><h3>Piezas a cortar (para ${fN(Q,0)} insertos)</h3><div class="body">
-        <table class="fija"><thead><tr>
-          <th class="l" style="width:32%">Componente</th><th style="width:9%">Mat.</th><th style="width:11%">Pzas/<br>inserto</th>
-          <th style="width:14%">Piezas<br>totales</th><th style="width:11%">Pzas/<br>placa</th><th style="width:11%">Placas<br>teórico</th><th style="width:12%">Placas a<br>cortar</th></tr></thead>
-        <tbody>${reqPzRows||'<tr><td colspan="7" class="l" style="color:var(--muted2)">Sin piezas.</td></tr>'}</tbody></table></div></div>
-      <div class="card"><h3>Costo del material total</h3><div class="body">
-        <table class="fija"><thead><tr>
-          <th class="l" style="width:24%">Material</th><th style="width:10%">Placas<br>teórico</th><th style="width:12%">Placas a<br>comprar</th>
-          <th style="width:14%">Precio<br>placa</th><th style="width:19%">Costo<br>teórico</th><th style="width:21%">Costo placas<br>completas</th></tr></thead>
-        <tbody>${reqMatRows||'<tr><td colspan="6" class="l" style="color:var(--muted2)">Define materiales y piezas.</td></tr>'}
-          <tr class="total"><td class="l">Totales</td><td></td><td></td><td></td><td class="mono">${fUSD(totalTeorico)}</td><td class="mono">${fUSD(totalPlacas)}</td></tr>
-        </tbody></table>
-        <table class="fija" style="margin-top:2px">
-          <tr class="sub"><td class="l" colspan="2">Resultado de la orden (${fN(Q,0)} insertos)</td></tr>
-          <tr><td class="l" style="width:58%">Costo material — teórico (MXN)<div class="hint">× TC ${fN(R.tc,4)}</div></td><td class="mono val-calc">${fMXN(totalTeorico*R.tc)}</td></tr>
-          <tr><td class="l">Costo material — placas completas (MXN)</td><td class="mono val-calc">${fMXN(totalPlacas*R.tc)}</td></tr>
-          <tr><td class="l">Precio de venta total (MXN)</td><td class="mono val-calc">${fMXN(ingresoTot)}</td></tr>
-          <tr><td class="l">${completeIt?'Costo integral total (MXN)':'Costo integral (falta capturar ruta)'}</td><td class="mono val-calc">${completeIt?fMXN(costoIntMXN*Q):'—'}</td></tr>
-          <tr class="total"><td class="l">${completeIt?'Utilidad total (MXN)':'Contribución total antes de conversión (MXN)'}</td><td class="mono">${completeIt?fMXN(utilIntTot):fMXN(contribTot)}</td></tr>
-        </table>
-        <div class="hint" style="padding:6px 12px">Costo teórico = costo unitario × cantidad (fraccional, ideal). Costo por placas completas = redondeando a placas enteras a comprar por material; la diferencia es el desperdicio por placa incompleta${totalTeorico>0?(' ('+fPct((totalPlacas-totalTeorico)/totalTeorico)+')'):''}.</div></div></div>
-    </div>` : `<div class="note">Captura la cantidad de insertos deseados para ver las piezas a cortar y el costo total del material.</div>`;
-  const matMXN=matUSD*R.tc;
+  const q26=num(ins.q26), matUSD=dz.totalUSD, util=q26-matUSD, matMXN=matUSD*R.tc;
   const catRows=(S.catalogo||[]).map((m,k)=>`<tr>
     <td class="l">${inp(`catalogo.${k}.nombre`,{type:"text",cls:"txt wide"})}</td>
     <td>${fracInput(`catalogo.${k}.grosor`,'in')}</td>
@@ -1327,6 +1284,15 @@ function secDiseno(R){
   return head("Costeo de placas — optimización de corte","INSERTO (hoja individual del Excel)",
     "Aquí capturas lo que antes vivía en la hoja de cada inserto: las placas de foam (hasta 3 materiales), las piezas (base, laterales, tapa…) con sus medidas y cantidad, y el aprovechamiento por placa. El costo del material resultante alimenta automáticamente el <b>Costeo integral</b>. Las medidas aceptan <b>fracciones</b> (ej. <b>17 3/4</b>, <b>3/8</b>) o decimales. Piezas por placa = máximo entre las dos orientaciones; puedes forzar el valor real de tu corte optimizado.")
   +`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <div class="exsel" style="display:inline-flex"><span>Cliente</span>
+        <select onchange="app.setClienteInserto(${idx},this.value)">
+          <option value="">Sin cliente</option>
+          ${(S.clientes||[]).map(c=>`<option ${clienteDe(ins)===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
+        </select></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="newCliId" class="f txt" style="width:150px" placeholder="Nuevo cliente" onkeydown="if(event.key==='Enter'){event.preventDefault();app.addCliente();}">
+        <button class="btn" onclick="app.addCliente()">+ Cliente</button>
+      </div>
       <div class="exsel" style="display:inline-flex"><span>Inserto</span>
         <select onchange="app.setDiseno(this.value)">${insOpts}</select></div>
       <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="app.delInsert(${idx})">Eliminar inserto</button>
@@ -1335,6 +1301,7 @@ function secDiseno(R){
         <button class="btn primary" onclick="app.addNamedInsert()">+ Crear inserto</button>
       </div>
     </div>
+    <div class="hint" style="margin:-8px 0 12px">Insertos de <b>${escapeHtml(clienteLabel(ins))}</b>: ${escapeHtml(S.inserts.filter(x=>clienteLabel(x)===clienteLabel(ins)).map(x=>String(x.id)).join(", ")||"—")}</div>
 
     <div class="card"><h3>Placas / materiales del inserto (hasta 3)</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
       <table><thead><tr><th class="l">#</th><th class="l">Material (catálogo o manual)</th><th>Precio placa $</th><th>Largo in</th><th>Ancho in</th><th>Grosor in</th><th>Área placa</th></tr></thead>
@@ -1362,12 +1329,6 @@ function secDiseno(R){
         <tbody>${dz.piezas.map(p=>`<tr><td class="l">${escapeHtml(String(p.comp||''))}</td><td class="mono">M${p.mat||1}</td>
           <td class="mono val-calc">${fUSD(p.costoInserto)}</td><td class="mono">${matUSD>0?fPct(p.costoInserto/matUSD):'—'}</td></tr>`).join("")||`<tr><td colspan="4" class="l" style="color:var(--muted2)">—</td></tr>`}</tbody></table></div></div>
     </div>
-
-    <div class="card" style="margin-top:16px"><h3>Requerimiento de material por cantidad terminada</h3><div class="pad">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-        <span class="hint">Cantidad de insertos deseados:</span>
-        ${inp(`inserts.${idx}.diseno.qDeseada`,{ph:"0"})}
-      </div></div></div>${reqBlock}
 
     <div class="card" style="margin-top:16px"><h3>Catálogo de placas (materiales) <span class="hint" style="font-weight:400">— compartido por todos los insertos</span></h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
       <table><thead><tr><th class="l">Material</th><th>Grosor in</th><th>Ancho in</th><th>Largo in</th><th>Costo placa $</th><th></th></tr></thead>
@@ -1535,16 +1496,48 @@ function computeMes(R,k){
   const utilAbs=comp.reduce((a,f)=>a+f.util,0);
   const piezas=act.reduce((a,f)=>a+f.vol,0);
   const Pre=computePresupuesto(R);
+  // Requerimiento de material del mes (consolidado por material)
+  const pzRows=[]; const porMat={}; let matUSD=0;
+  act.forEach(f=>{
+    const dz=disenoCalc(f.it.ins); if(!dz) return;
+    matUSD+=dz.totalUSD*f.vol;
+    dz.piezas.forEach(p=>{
+      const M=dz.mats[(num(p.mat)||1)-1]||matEff({});
+      const nom=M.nombre||("Material "+(num(p.mat)||1));
+      const tot=num(p.cant)*f.vol, frac=p.ppp>0?tot/p.ppp:0;
+      pzRows.push({ins:f.id,comp:p.comp,mat:nom,tot,ppp:p.ppp,frac,placas:Math.ceil(frac-1e-9)});
+      if(!porMat[nom]) porMat[nom]={nom,precio:M.precio,frac:0,costoTeo:0};
+      porMat[nom].frac+=frac; porMat[nom].costoTeo+=p.costoInserto*f.vol;
+    });
+  });
+  const mats=Object.values(porMat).map(m=>({...m,comprar:Math.ceil(m.frac-1e-9),costoPlacas:Math.ceil(m.frac-1e-9)*m.precio}));
+  const totPlacasUSD=mats.reduce((a,m)=>a+m.costoPlacas,0);
+  // Agrupación por cliente
+  const porCli={};
+  act.forEach(f=>{
+    const cli=clienteLabel(f.it.ins);
+    if(!porCli[cli]) porCli[cli]={cli,ins:0,piezas:0,ventas:0,costo:0,util:0,contrib:0,completos:0};
+    const g=porCli[cli]; g.ins++; g.piezas+=f.vol; g.ventas+=f.ventas; g.contrib+=f.contrib;
+    if(f.it.complete){ g.costo+=f.costo; g.util+=f.util; g.completos++; }
+  });
+  const clientes=Object.values(porCli).map(g=>({...g,margen:(g.ventas>0&&g.completos?g.util/g.ventas:null)}))
+                   .sort((a,b)=>b.ventas-a.ventas);
   return {P,filas,act,comp,ventas,material,contrib,costoAbs,utilAbs,piezas,
           margen:(ventas>0?utilAbs/ventas:null), fijos:Pre.GF,
-          utilOper:contrib-Pre.GF, incompletos:act.length-comp.length};
+          utilOper:contrib-Pre.GF, incompletos:act.length-comp.length,
+          pzRows,mats,matUSD,totPlacasUSD,clientes};
 }
+let cliFiltro="(todos)";
 function secMes(R){
   const k=periodoKey(); const M=computeMes(R,k);
-  const rows=M.filas.map(f=>`<tr${f.inc?'':' style="opacity:.5"'}>
+  const cliLista=["(todos)"].concat([...new Set(S.inserts.map(i=>clienteLabel(i)))].sort());
+  if(!cliLista.includes(cliFiltro)) cliFiltro="(todos)";
+  const rows=M.filas.filter(f=>cliFiltro==="(todos)"||clienteLabel(f.it.ins)===cliFiltro)
+    .map(f=>`<tr${f.inc?'':' style="opacity:.5"'}>
     <td class="l"><label style="display:flex;align-items:center;gap:6px;cursor:pointer">
       <input type="checkbox" data-mes="${escapeHtml(f.id)}" data-campo="inc" ${f.inc?'checked':''}>
       <span class="mono">${escapeHtml(f.id)}</span></label></td>
+    <td class="l" title="Se define en Costeo de placas">${escapeHtml(clienteLabel(f.it.ins))}</td>
     <td><input class="f" type="number" step="any" data-mes="${escapeHtml(f.id)}" data-campo="vol" value="${f.vol||''}" placeholder="0"></td>
     <td class="mono val-calc">${fMXN(f.it.costoIntegral)}</td>
     <td class="mono val-calc">${fMXN(f.it.precioClMXN)}</td>
@@ -1559,6 +1552,8 @@ function secMes(R){
   +`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
       <div class="exsel" style="display:inline-flex"><span>Periodo</span>
         <input type="month" class="f" style="width:140px" value="${escapeHtml(k)}" onchange="app.setPeriodo(this.value)"></div>
+      <div class="exsel" style="display:inline-flex"><span>Cliente</span>
+        <select onchange="app.setCliFiltro(this.value)">${cliLista.map(c=>`<option ${c===cliFiltro?'selected':''}>${escapeHtml(c)}</option>`).join("")}</select></div>
       <span class="hint">${nombreMes(k)} · ${M.act.length} insertos · ${fN(M.piezas,0)} pzas${hist.length>1?(' · '+hist.length+' periodos guardados'):''}</span>
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
         <button class="rowbtn" style="margin:0" onclick="app.mesTodos(true)">Marcar todos</button>
@@ -1576,10 +1571,10 @@ function secMes(R){
     </div>
 
     <div class="tabla-integral" style="margin-top:14px"><table class="compact"><thead><tr>
-      <th class="l">Incluir / inserto</th><th>Volumen<br>del mes</th><th>Costo<br>integral u.</th><th>Precio<br>cliente u.</th>
+      <th class="l">Incluir / inserto</th><th class="l">Cliente</th><th>Volumen<br>del mes</th><th>Costo<br>integral u.</th><th>Precio<br>cliente u.</th>
       <th>Ventas<br>del mes</th><th>Costo<br>del mes</th><th>Utilidad<br>del mes</th><th>Margen</th><th class="l">Estado</th>
       </tr></thead><tbody>${rows}</tbody>
-      <tfoot><tr class="total"><td class="l">Totales del periodo</td><td class="mono">${fN(M.piezas,0)}</td><td></td><td></td>
+      <tfoot><tr class="total"><td class="l">Totales del periodo</td><td></td><td class="mono">${fN(M.piezas,0)}</td><td></td><td></td>
         <td class="mono">${fMXN(M.ventas)}</td><td class="mono">${fMXN(M.costoAbs)}</td><td class="mono">${fMXN(M.utilAbs)}</td>
         <td class="mono">${M.margen==null?'—':fPct(M.margen)}</td><td></td></tr></tfoot></table></div>
 
@@ -1598,7 +1593,56 @@ function secMes(R){
         <tr><td class="l">Margen ponderado</td><td class="mono val-calc">${M.margen==null?'—':fPct(M.margen)}</td></tr>
         <tr><td class="l">Insertos sin costeo completo</td><td class="mono val-calc">${M.incompletos}</td></tr>
       </table><div class="note" style="margin-top:10px">Cada pieza ya absorbe su parte de conversión y gastos. Sólo incluye insertos con ruta capturada.</div></div></div>
-    </div>`;
+    </div>
+
+    ${M.clientes&&M.clientes.length?`
+    <div class="sechead" style="margin-top:22px"><h2 style="font-size:15px">Resultado por cliente</h2>
+      <span class="src">${M.clientes.length} cliente(s) en ${nombreMes(k)}</span></div>
+    <div class="tabla-integral" style="margin-top:8px"><table class="compact"><thead><tr>
+      <th class="l">Cliente</th><th>Insertos</th><th>Piezas</th><th>Ventas</th><th>Costo</th><th>Utilidad</th><th>Margen</th><th>% de ventas</th>
+      </tr></thead><tbody>${M.clientes.map(g=>`<tr>
+        <td class="l" style="font-weight:500">${escapeHtml(g.cli)}</td>
+        <td class="mono">${g.ins}</td><td class="mono">${fN(g.piezas,0)}</td>
+        <td class="mono val-calc">${fMXN(g.ventas)}</td>
+        <td class="mono val-calc">${g.completos?fMXN(g.costo):'—'}</td>
+        <td class="mono val-calc" style="font-weight:700">${g.completos?fMXN(g.util):'—'}</td>
+        <td class="mono">${g.margen==null?'—':fPct(g.margen)}</td>
+        <td class="mono val-calc">${M.ventas>0?fPct(g.ventas/M.ventas):'—'}</td></tr>`).join("")}
+      </tbody><tfoot><tr class="total"><td class="l">Total del mes (todos los clientes)</td>
+        <td class="mono">${M.act.length}</td><td class="mono">${fN(M.piezas,0)}</td>
+        <td class="mono">${fMXN(M.ventas)}</td><td class="mono">${fMXN(M.costoAbs)}</td>
+        <td class="mono">${fMXN(M.utilAbs)}</td><td class="mono">${M.margen==null?'—':fPct(M.margen)}</td>
+        <td class="mono">100.0%</td></tr></tfoot></table></div>
+    <div class="note" style="margin-top:8px">El cliente de cada inserto se define en <b>Costeo de placas</b>. El costeo mensual total siempre considera todos los insertos, sin importar el cliente.</div>`:''}
+
+    ${M.pzRows.length?`
+    <div class="sechead" style="margin-top:22px"><h2 style="font-size:15px">Requerimiento de material del mes</h2>
+      <span class="src">consolidado de los insertos activos</span></div>
+    <div class="grid2" style="margin-top:8px">
+      <div class="card"><h3>Piezas a cortar</h3><div class="body">
+        <table class="fija"><thead><tr>
+          <th class="l" style="width:17%">Inserto</th><th class="l" style="width:27%">Componente</th><th style="width:17%">Piezas<br>totales</th>
+          <th style="width:13%">Pzas/<br>placa</th><th style="width:13%">Placas<br>teórico</th><th style="width:13%">Placas a<br>cortar</th></tr></thead>
+        <tbody>${M.pzRows.map(r=>`<tr><td class="l mono">${escapeHtml(r.ins)}</td><td class="l">${escapeHtml(String(r.comp||''))}</td>
+          <td class="mono val-calc" style="font-weight:600">${fN(r.tot,0)}</td><td class="mono">${r.ppp}</td>
+          <td class="mono val-calc">${fN(r.frac,2)}</td><td class="mono val-calc" style="font-weight:600">${r.placas}</td></tr>`).join("")}</tbody></table></div></div>
+      <div class="card"><h3>Costo del material total</h3><div class="body">
+        <table class="fija"><thead><tr>
+          <th class="l" style="width:24%">Material</th><th style="width:10%">Placas<br>teórico</th><th style="width:12%">Placas a<br>comprar</th>
+          <th style="width:14%">Precio<br>placa</th><th style="width:19%">Costo<br>teórico</th><th style="width:21%">Costo placas<br>completas</th></tr></thead>
+        <tbody>${M.mats.map(m=>`<tr><td class="l">${escapeHtml(m.nom)}</td><td class="mono val-calc">${fN(m.frac,2)}</td>
+          <td class="mono val-calc" style="font-weight:600">${m.comprar}</td><td class="mono">${fUSD(m.precio)}</td>
+          <td class="mono val-calc">${fUSD(m.costoTeo)}</td><td class="mono val-calc" style="font-weight:600">${fUSD(m.costoPlacas)}</td></tr>`).join("")}
+          <tr class="total"><td class="l">Totales</td><td></td><td></td><td></td><td class="mono">${fUSD(M.matUSD)}</td><td class="mono">${fUSD(M.totPlacasUSD)}</td></tr>
+        </tbody></table>
+        <table class="fija" style="margin-top:2px">
+          <tr><td class="l" style="width:58%">Costo material — teórico (MXN)<div class="hint">× TC ${fN(R.tc,4)}</div></td><td class="mono val-calc">${fMXN(M.matUSD*R.tc)}</td></tr>
+          <tr><td class="l">Costo material — placas completas (MXN)</td><td class="mono val-calc">${fMXN(M.totPlacasUSD*R.tc)}</td></tr>
+          <tr><td class="l">Ventas del mes (MXN)</td><td class="mono val-calc">${fMXN(M.ventas)}</td></tr>
+          <tr class="total"><td class="l">${M.comp.length?'Utilidad del mes (MXN)':'Contribución del mes (MXN)'}</td><td class="mono">${M.comp.length?fMXN(M.utilAbs):fMXN(M.contrib)}</td></tr>
+        </table>
+        <div class="hint" style="padding:6px 12px">Costo teórico = consumo exacto de material. Costo por placas completas = redondeando a placas enteras a comprar${M.matUSD>0?(', desperdicio por placa incompleta '+fPct((M.totPlacasUSD-M.matUSD)/M.matUSD)):''}.</div></div></div>
+    </div>`:''}`;
 }
 
 /* ---------- VALIDACIÓN ---------- */
@@ -1790,25 +1834,53 @@ function buildDashboardCharts(R){
 }
 
 /* ===================== PRESUPUESTO Y PUNTO DE EQUILIBRIO ===================== */
+function volPeriodo(key){
+  if(!key||key==="catalogo") return id=>num((S.perInsert[id]||{}).volumen);
+  if(String(key).startsWith("anio:")){
+    const y=String(key).slice(5);
+    const ks=Object.keys(S.periodos||{}).filter(k=>k.indexOf(y+"-")===0);
+    return id=>ks.reduce((a,k)=>{const c=((S.periodos[k]||{}).items||{})[id]||{}; return a+(c.inc?num(c.vol):0);},0);
+  }
+  const P=(S.periodos||{})[key]||{items:{}};
+  return id=>{const c=(P.items||{})[id]||{}; return c.inc?num(c.vol):0;};
+}
+function etiquetaPeriodo(key){
+  if(!key||key==="catalogo") return "Catálogo (volúmenes generales)";
+  if(String(key).startsWith("anio:")) return "Año "+String(key).slice(5);
+  return nombreMes(key);
+}
+function listaPeriodos(){
+  const ks=Object.keys(S.periodos||{}).filter(k=>/^\d{4}-\d{2}$/.test(k)).sort().reverse();
+  const anios=[...new Set(ks.map(k=>k.slice(0,4)))].sort().reverse();
+  return [{v:"catalogo",t:"Catálogo (volúmenes generales)"}]
+    .concat(anios.map(y=>({v:"anio:"+y,t:"Año "+y})))
+    .concat(ks.map(k=>({v:k,t:nombreMes(k)})));
+}
 function avgContribRatio(R){
   const arr=R.integral.filter(i=>i.precioClMXN>0).map(i=>i.contribUnit/i.precioClMXN);
   return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
 }
-function computePresupuesto(R){
+function computePresupuesto(R,pk){
+  const key=(pk!==undefined)?pk:((S.presupuesto&&S.presupuesto.periodo)||"catalogo");
   const gfManuf=R.pool, gfAdmin=R.indAdmin+R.moAdmin, gfComer=R.indComercial+R.moComercial,
         gfLog=R.indLog, gfFin=R.indFin, otros=num(S.presupuesto.otrosFijos);
   const GF=gfManuf+gfAdmin+gfComer+gfLog+gfFin+otros;
-  const ventas=R.ingresoMesTot;
-  const matMes=R.integral.reduce((a,i)=>a+i.materialMXN*i.vol,0);
+  const getVol=volPeriodo(key);
+  const esAnio=String(key).indexOf("anio:")===0;
+  const meses=esAnio?Math.max(1,Object.keys(S.periodos||{}).filter(k=>k.indexOf(String(key).slice(5)+"-")===0).length):1;
+  let ventas=0, matMes=0;
+  R.integral.forEach(i=>{ const v=getVol(String(i.ins.id)); ventas+=i.precioClMXN*v; matMes+=i.materialMXN*v; });
   const contribMes=ventas-matMes;
   const conVol=ventas>0;
   const ratio=conVol?(ventas>0?contribMes/ventas:0):avgContribRatio(R);
-  const PE=ratio>0?GF/ratio:null;
-  const utilOper=conVol?(contribMes-GF):null;
+  const GFper=GF*meses;
+  const PE=ratio>0?GFper/ratio:null;
+  const utilOper=conVol?(contribMes-GFper):null;
   const margenSeg=(conVol&&ventas>0&&PE!=null)?(ventas-PE)/ventas:null;
   const faltante=(PE!=null&&conVol&&ventas<PE)?(PE-ventas):null;
   const meta=(S.presupuesto.meta==null||S.presupuesto.meta==="")?null:num(S.presupuesto.meta);
-  return {gfManuf,gfAdmin,gfComer,gfLog,gfFin,otros,GF,ventas,matMes,contribMes,conVol,ratio,PE,utilOper,margenSeg,faltante,meta};
+  return {key,etiqueta:etiquetaPeriodo(key),meses,gfManuf,gfAdmin,gfComer,gfLog,gfFin,otros,
+          GF:GFper,GFmes:GF,ventas,matMes,contribMes,conVol,ratio,PE,utilOper,margenSeg,faltante,meta};
 }
 function secPresupuesto(R){
   const P=computePresupuesto(R);
@@ -1848,12 +1920,19 @@ function secPresupuesto(R){
   </table>`;
 
   return head("Presupuesto y punto de equilibrio","ESTADO DE RESULTADOS · EQUILIBRIO",
-    "Hoja financiera de la empresa. El costo variable es el material; la mano de obra y los indirectos se tratan como gastos fijos del periodo (así es como los capturas, por mes). Punto de equilibrio = gastos fijos ÷ margen de contribución. Captura los volúmenes mensuales por inserto (en Costeo integral) para que refleje tus ventas reales.")
-  +`<div class="hero">
-      ${hcard("Ventas mensuales",P.conVol?fMXN0(P.ventas):"—","con volúmenes capturados","",true)}
+    "Hoja financiera de la empresa. El costo variable es el material; la mano de obra y los indirectos se tratan como gastos fijos del periodo. Punto de equilibrio = gastos fijos ÷ margen de contribución. Consulta cualquier mes trabajado o el acumulado de un año.")
+  +`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <div class="exsel" style="display:inline-flex"><span>Consultar periodo</span>
+        <select onchange="app.setPresuPeriodo(this.value)">
+          ${listaPeriodos().map(o=>`<option value="${escapeHtml(o.v)}" ${String(P.key)===o.v?'selected':''}>${escapeHtml(o.t)}</option>`).join("")}
+        </select></div>
+      <span class="hint">${escapeHtml(P.etiqueta)}${P.meses>1?(" · "+P.meses+" meses acumulados"):""}${P.conVol?"":" · sin volúmenes capturados en este periodo"}</span>
+    </div>
+    <div class="hero">
+      ${hcard("Ventas "+(P.meses>1?"del año":"del periodo"),P.conVol?fMXN0(P.ventas):"—",escapeHtml(P.etiqueta),"",true)}
       ${hcard("Margen de contribución",fPct(P.ratio),P.conVol?"ponderado por mezcla":"promedio (sin volumen)")}
-      ${hcard("Gastos fijos",fMXN0(P.GF),"a cubrir cada mes")}
-      ${hcard("Punto de equilibrio",P.PE==null?"—":fMXN0(P.PE),"en ventas mensuales")}
+      ${hcard("Gastos fijos",fMXN0(P.GF),P.meses>1?(P.meses+" meses · "+fMXN0(P.GFmes)+"/mes"):"a cubrir cada mes")}
+      ${hcard("Punto de equilibrio",P.PE==null?"—":fMXN0(P.PE),"en ventas "+(P.meses>1?"anuales":"mensuales"))}
     </div>
     <div class="hero">
       ${hcard("Utilidad de operación",P.utilOper==null?"—":fMXN0(P.utilOper),P.utilOper==null?"captura volúmenes":(P.utilOper>0?"la empresa gana":"pérdida"),P.utilOper==null?"g":(P.utilOper>0?"v":"r"))}
@@ -2013,13 +2092,21 @@ function buildWorkbook(){
   const kk=periodoKey(); const M=computeMes(R,kk);
   if(M.act.length){
     const mesRows=[["COSTEO MENSUAL — "+nombreMes(kk)],[],
-      ["Inserto","Volumen","Costo integral u.","Precio cliente u.","Ventas del mes","Costo del mes","Utilidad del mes","Margen %","Estado"]];
-    M.act.forEach(f=>mesRows.push([f.id,f.vol,r2(f.it.costoIntegral),r2(f.it.precioClMXN),r2(f.ventas),
+      ["Inserto","Cliente","Volumen","Costo integral u.","Precio cliente u.","Ventas del mes","Costo del mes","Utilidad del mes","Margen %","Estado"]];
+    M.act.forEach(f=>mesRows.push([f.id,clienteLabel(f.it.ins),f.vol,r2(f.it.costoIntegral),r2(f.it.precioClMXN),r2(f.ventas),
       f.it.complete?r2(f.costo):"—",f.it.complete?r2(f.util):"—",f.it.margenReal==null?"—":r2(f.it.margenReal*100),f.it.estado]));
-    mesRows.push(["TOTALES",M.piezas,"","",r2(M.ventas),r2(M.costoAbs),r2(M.utilAbs),M.margen==null?"—":r2(M.margen*100),""]);
+    mesRows.push(["TOTALES","",M.piezas,"","",r2(M.ventas),r2(M.costoAbs),r2(M.utilAbs),M.margen==null?"—":r2(M.margen*100),""]);
     mesRows.push([],["Margen de contribución",r2(M.contrib)],["Gastos fijos del mes",r2(M.fijos)],
       ["Utilidad de operación",r2(M.utilOper)],["Insertos sin costeo completo",M.incompletos]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mesRows), "Costeo mensual");
+    if(M.clientes&&M.clientes.length){
+      const cliRows=[["RESULTADO POR CLIENTE — "+nombreMes(kk)],[],
+        ["Cliente","Insertos","Piezas","Ventas","Costo","Utilidad","Margen %","% de ventas"]];
+      M.clientes.forEach(g=>cliRows.push([g.cli,g.ins,g.piezas,r2(g.ventas),g.completos?r2(g.costo):"—",
+        g.completos?r2(g.util):"—",g.margen==null?"—":r2(g.margen*100),M.ventas>0?r2(g.ventas/M.ventas*100):"—"]));
+      cliRows.push(["TOTAL DEL MES",M.act.length,M.piezas,r2(M.ventas),r2(M.costoAbs),r2(M.utilAbs),M.margen==null?"—":r2(M.margen*100),100]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cliRows), "Por cliente");
+    }
   }
 
   const H=["Inserto","Material USD","% Merma mat.","Material MXN","MO","Indirectos",
@@ -2059,11 +2146,12 @@ function buildWorkbook(){
   if(prow.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([PDH,...prow]), "Costeo de placas");
 
   // Requerimiento de material por cantidad terminada
-  const rqP=[["Inserto","Cantidad deseada","Componente","Material","Pzas/inserto","Piezas totales","Pzas/placa","Placas (teórico)","Placas a cortar"]];
-  const rqM=[["Inserto","Cantidad deseada","Material","Placas (teórico)","Placas a comprar","Precio placa USD","Costo teórico USD","Costo placas USD","Costo teórico MXN","Costo placas MXN"]];
+  const rqP=[["Inserto","Volumen del mes","Componente","Material","Pzas/inserto","Piezas totales","Pzas/placa","Placas (teórico)","Placas a cortar"]];
+  const rqM=[["Inserto","Volumen del mes","Material","Placas (teórico)","Placas a comprar","Precio placa USD","Costo teórico USD","Costo placas USD","Costo teórico MXN","Costo placas MXN"]];
+  const PM=ensurePeriodo(periodoKey());
   S.inserts.forEach(ins=>{
     const d=disenoCalc(ins); if(!d) return;
-    const Q=num(ins.diseno&&ins.diseno.qDeseada); if(!(Q>0)) return;
+    const cfgQ=PM.items[String(ins.id)]||{}; const Q=(cfgQ.inc?num(cfgQ.vol):0); if(!(Q>0)) return;
     d.piezas.forEach(p=>{
       const tot=num(p.cant)*Q, frac=p.ppp>0?tot/p.ppp:0, placas=Math.ceil(frac-1e-9);
       rqP.push([ins.id,Q,p.comp,"M"+(p.mat||1),num(p.cant),tot,p.ppp,r2(frac),placas]);
@@ -2080,10 +2168,10 @@ function buildWorkbook(){
   if(rqP.length>1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rqP), "Req. piezas a cortar");
   if(rqM.length>1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rqM), "Req. material y costo");
 
-  const rqU=[["Inserto","Cantidad deseada","Ingreso total MXN","Costo integral total MXN","Utilidad total MXN","Contribución total (sin ruta) MXN","Estado"]];
+  const rqU=[["Inserto","Volumen del mes","Ingreso total MXN","Costo integral total MXN","Utilidad total MXN","Contribución total (sin ruta) MXN","Estado"]];
   S.inserts.forEach(ins=>{
     const d=disenoCalc(ins); if(!d) return;
-    const Q=num(ins.diseno&&ins.diseno.qDeseada); if(!(Q>0)) return;
+    const cfgU=PM.items[String(ins.id)]||{}; const Q=(cfgU.inc?num(cfgU.vol):0); if(!(Q>0)) return;
     const it=R.integral.find(x=>String(x.ins.id)===String(ins.id))||{};
     const ing=num(it.precioClMXN)*Q, comp=!!it.complete;
     rqU.push([ins.id,Q,r2(ing), comp?r2(num(it.costoIntegral)*Q):"—", comp?r2(num(it.utilidad)*Q):"—",
@@ -2133,6 +2221,19 @@ const app={
       save(); renderKPIs(); renderChain(); renderSection(current); toast("Inserto "+(id||"")+" eliminado");
     }, "Eliminar inserto");
   },
+  setClienteInserto(idx,v){ S.inserts[idx].cliente=(v||"").trim()||null; ensureClientes(); save(); renderKPIs(); renderChain(); renderSection("placas"); },
+  addCliente(){
+    const el=document.getElementById("newCliId"); const v=(el?el.value:"").trim();
+    if(!v){ toast("Escribe el nombre del cliente"); if(el)el.focus(); return; }
+    if(!Array.isArray(S.clientes)) S.clientes=[];
+    if(!S.clientes.includes(v)) S.clientes.push(v);
+    S.clientes.sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+    const i=S.inserts.findIndex(x=>String(x.id)===String(disenoSel));
+    if(i>=0) S.inserts[i].cliente=v;
+    save(); renderSection("placas"); toast("Cliente "+v+" asignado a "+disenoSel);
+  },
+  setCliFiltro(v){ cliFiltro=v; renderSection("mes"); },
+  setPresuPeriodo(v){ if(!S.presupuesto) S.presupuesto={}; S.presupuesto.periodo=v; save(); renderKPIs(); renderChain(); renderSection("presupuesto"); },
   setPeriodo(v){ if(!v) return; S.periodoActivo=v; ensurePeriodo(v); save(); renderSection("mes"); },
   mesTodos(v){ const P=ensurePeriodo(periodoKey()); S.inserts.forEach(i=>{ const id=String(i.id); if(!P.items[id])P.items[id]={}; P.items[id].inc=v; }); save(); renderSection("mes"); },
   mesCopiarVol(){ const P=ensurePeriodo(periodoKey()); let n=0;
@@ -2285,10 +2386,10 @@ const app={
       const kk=periodoKey(); const M=computeMes(R,kk);
       if(M.act.length){
         tabla("Costeo mensual — "+nombreMes(kk),
-          ["Inserto","Volumen","Costo integral u.","Precio cliente u.","Ventas del mes","Costo del mes","Utilidad del mes","Margen"],
-          M.act.map(f=>[f.id,fN(f.vol,0),fMXN(f.it.costoIntegral),fMXN(f.it.precioClMXN),fMXN(f.ventas),
+          ["Inserto","Cliente","Volumen","Costo integral u.","Precio cliente u.","Ventas del mes","Costo del mes","Utilidad del mes","Margen"],
+          M.act.map(f=>[f.id,clienteLabel(f.it.ins),fN(f.vol,0),fMXN(f.it.costoIntegral),fMXN(f.it.precioClMXN),fMXN(f.ventas),
             f.it.complete?fMXN(f.costo):"—",f.it.complete?fMXN(f.util):"—",f.it.margenReal==null?"—":fPct(f.it.margenReal)])
-            .concat([["TOTALES",fN(M.piezas,0),"","",fMXN(M.ventas),fMXN(M.costoAbs),fMXN(M.utilAbs),M.margen==null?"—":fPct(M.margen)]]),
+            .concat([["TOTALES","",fN(M.piezas,0),"","",fMXN(M.ventas),fMXN(M.costoAbs),fMXN(M.utilAbs),M.margen==null?"—":fPct(M.margen)]]),
           {sub:"Contribución "+fMXN(M.contrib)+"  −  gastos fijos "+fMXN(M.fijos)+"  =  utilidad de operación "+fMXN(M.utilOper),
            cols:{0:{halign:"left",fontStyle:"bold"}}});
       }
@@ -2317,12 +2418,12 @@ const app={
       // Requerimiento de material (insertos con cantidad deseada)
       const reqBody=[];
       S.inserts.forEach(ins=>{ const dz=disenoCalc(ins); if(!dz) return;
-        const Qd=num(ins.diseno&&ins.diseno.qDeseada); if(!(Qd>0)) return;
+        const cfgP=ensurePeriodo(periodoKey()).items[String(ins.id)]||{}; const Qd=(cfgP.inc?num(cfgP.vol):0); if(!(Qd>0)) return;
         dz.piezas.forEach(p=>{ const tot=num(p.cant)*Qd, frac=p.ppp>0?tot/p.ppp:0;
           reqBody.push([ins.id,fN(Qd,0),p.comp,"M"+(p.mat||1),fN(tot,0),String(p.ppp),String(Math.ceil(frac-1e-9))]); });
       });
-      tabla("Requerimiento de material por cantidad terminada",
-        ["Inserto","Cantidad","Componente","Mat.","Piezas totales","Pzas/placa","Placas a cortar"],reqBody,
+      tabla("Requerimiento de material del mes",
+        ["Inserto","Volumen","Componente","Mat.","Piezas totales","Pzas/placa","Placas a cortar"],reqBody,
         {cols:{0:{halign:"left",fontStyle:"bold"},2:{halign:"left"}}});
 
       // Validación

@@ -207,6 +207,10 @@ td.sua-off{background:repeating-linear-gradient(45deg,#f6f8f9,#f6f8f9 4px,#eef2f
 .ic.risk{background:var(--redBg);color:#a32636}
 .ic.info{background:var(--accentSoft);color:var(--accent2)}
 .insights b{font-weight:700}
+.ro input.f,.ro select.f,.ro textarea{pointer-events:none;background:var(--line2);color:var(--muted);border-color:var(--line2)}
+.ro input[type=checkbox]{pointer-events:none;opacity:.5}
+.ro .rowbtn,.ro .del,.ro .btn.danger{display:none}
+.pill.rol{background:var(--accentSoft);color:var(--accent2)}
 .modal-ov{position:fixed;inset:0;background:rgba(16,30,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
 .modal{background:var(--panel);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.32);max-width:440px;width:100%;padding:22px;border:1px solid var(--line)}
 .modal-msg{font-size:14px;color:var(--text);line-height:1.5;margin-bottom:20px}
@@ -242,6 +246,8 @@ td.sua-off{background:repeating-linear-gradient(45deg,#f6f8f9,#f6f8f9 4px,#eef2f
     <div class="topbar">
       <div class="save"><span class="dot" id="dot"></span><span id="saveTxt">Guardado</span></div>
       <div class="actions">
+        <span id="rolBadge" class="pill ok" style="align-self:center"></span>
+        <button class="btn" onclick="app.abrirAcceso()">Acceso</button>
         <button class="btn primary" onclick="app.exportExcel()">Exportar a Excel</button>
         <button class="btn" onclick="app.exportPDF()">Exportar a PDF</button>
         <button class="btn" onclick="app.exportJSON()">Respaldar datos</button>
@@ -370,6 +376,7 @@ const DEFAULTS={
   perInsert:{ /* id -> {mermaMat, margenObj(null=default), garantia} */ },
   presupuesto:{otrosFijos:0,meta:null},
   periodos:{}, periodoActivo:null, periodoVista:"catalogo", clientes:[],
+  seguridad:{pin:null},
   ruta:[
     {ins:"160143",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
     {ins:"160145",op:10,proc:"Corte/Pegado/Ensamble",ce:"Corte/Pegado/Ensamble",prep:null,lote:1,minMO:null,minMaq:null,nop:1,retrab:0,merma:0},
@@ -775,6 +782,11 @@ function renderNav(){
     `<li><button class="navbtn ${s.id===current?'active':''}" onclick="app.go('${s.id}')">
       <span class="ix mono">${s.ix}</span>${s.name}</button></li>`).join("");
 }
+function renderRol(){
+  const b=document.getElementById("rolBadge"); if(!b) return;
+  b.textContent=ROLES[ROL]||ROL; b.className="pill rol";
+  b.title=puedeEditar()?"Puedes capturar datos":"Solo lectura";
+}
 function renderKPIs(){
   const R=compute();
   const estadoTxt = R.incompletos>0?`${R.incompletos} incompleto(s)`:(R.bajoObj>0?`${R.bajoObj} bajo objetivo`:"Todos OK");
@@ -827,7 +839,7 @@ function secResumen(R){
     <td class="l"><span class="lz ${i.luz}"><span class="b"></span>${i.estado}</span></td></tr>`).join("");
   return head("Resumen del costeo","COSTEO_INTEGRAL · CONTROL · VALIDACION",
     "Vista de todos los insertos con su costo integral, precio y semáforo. Cambia cualquier dato en las demás secciones y estos indicadores se recalculan en cadena. Sin tiempos de ruta, el inserto queda como <b>costeo incompleto</b> y no genera precio válido.")
-    +`<div class="filterbar">${periodoSelector()}<span class="hint">Consultando: <b>${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))}</b></span></div>
+    +`<div class="filterbar">${periodoSelector()}<span class="hint">Consultando: <b>${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))}</b></span>${badgePeriodo(S.periodoVista)}</div>
     <div class="scroll"><table><thead><tr>
       <th class="l">Inserto</th><th>Material (USD)</th><th>Material (MXN)</th><th>Conversión</th>
       <th>Costo integral</th><th>Precio sugerido</th><th>Precio cliente</th><th>Utilidad/pza</th>
@@ -929,7 +941,7 @@ function secCapacidad(R){
     <td>${perInput("capacidad",kk,"capacidad."+kk,{pct:u==="%"})}<span class="unit">${u}</span></td></tr>`).join("");
   return head("Capacidad práctica","CAPACIDAD",
     "Sustituye el viejo factor fijo de 85%. La capacidad práctica es el denominador de todas las tarifas. La capacidad ociosa se muestra aparte y no se reparte entre productos.")
-  +`<div class="filterbar">${periodoSelector()}<span class="hint">${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))} — ${avisoPeriodo()}</span></div>
+  +`<div class="filterbar">${periodoSelector()}<span class="hint">${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))} — ${avisoPeriodo()}</span>${badgePeriodo(S.periodoVista)}</div>
     <div class="grid2">
     <div class="card"><h3>Tiempo disponible</h3><div class="pad"><table>${irows}</table></div></div>
     <div class="card"><h3>Capacidad resultante</h3><div class="pad"><table>
@@ -1008,7 +1020,7 @@ function secIndirectos(R){
   return head("Indirectos y gastos","INDIRECTOS",
     "La clasificación decide a dónde va cada gasto: los fabriles entran a la tasa de manufactura; administración, comercial, logística y financiero se aplican en el costo integral. Los conceptos son fijos, pero <b>el monto se captura por mes</b>: elige el periodo y ajusta lo que cambió; lo que dejes en blanco toma el valor del catálogo.")
   +`<div class="filterbar">${periodoSelector()}
-      <span class="hint">Montos de <b>${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))}</b>${(S.periodoVista||"catalogo")==="catalogo"?" — valores base del catálogo":(indirectoEditable()?" — captura el monto del mes; en blanco usa el del catálogo":" — promedio de los meses capturados")}</span>
+      ${badgePeriodo(S.periodoVista)}<span class="hint">Montos de <b>${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))}</b>${(S.periodoVista||"catalogo")==="catalogo"?" — valores base del catálogo":(indirectoEditable()?" — captura el monto del mes; en blanco usa el del catálogo":" — promedio de los meses capturados")}</span>
       ${indirectoEditable()&&(S.periodoVista||"catalogo")!=="catalogo"?`<button class="rowbtn" style="margin:0" onclick="app.indCopiarBase()">Copiar montos del catálogo</button><button class="rowbtn" style="margin:0" onclick="app.indLimpiarMes()">Limpiar mes</button>`:""}</div>
     <div class="scroll"><table><thead><tr><th class="l">Concepto</th><th class="l">Clasificación</th><th class="l">Centro</th><th>$/mes${(S.periodoVista||"catalogo")==="catalogo"?"":" del periodo"}</th><th>Base<br>catálogo</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>
@@ -1041,7 +1053,7 @@ function secEnergia(R){
     <td><button class="del" onclick="app.delRow('energia.cargas',${i})">✕</button></td></tr>`).join("");
   return head("Energía y pool de manufactura","COSTEO_MANUFACTURA",
     "Tarifa comercial de baja tensión (PDBT): sólo cargo por consumo ($/kWh) + cargo fijo, sin cargo por demanda (eso aplica a media tensión con subestación). La base principal debe ser el recibo real de CFE; la estimación por potencia×horas es sólo validación. El pool reúne energía + MO directa + indirectos fabriles y define la tasa de planta.")
-  +`<div class="filterbar">${periodoSelector()}<span class="hint">${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))} — ${avisoPeriodo()}</span></div>
+  +`<div class="filterbar">${periodoSelector()}<span class="hint">${escapeHtml(etiquetaPeriodo(S.periodoVista||"catalogo"))} — ${avisoPeriodo()}</span>${badgePeriodo(S.periodoVista)}</div>
     <div class="grid2">
     <div class="card"><h3>Parámetros de energía · CFE tarifa comercial baja tensión (PDBT)</h3><div class="pad"><table>
       <tr><td class="l">Precio de energía (tarifa comercial PDBT)</td><td>${perInput("energia","precio","energia.precio")}<span class="unit">$/kWh</span></td></tr>
@@ -1144,7 +1156,7 @@ function secFinanciero(R){
 
 /* ---------- INTEGRAL ---------- */
 function secIntegral(R){
-  const rows=R.integral.map((it,i)=>{
+  const rows=R.integral.map((it,i)=>({it,i})).filter(o=>pasaCliente(o.it.ins)).map(({it,i})=>{
     const id=it.ins.id; const pi=S.perInsert[id]||{};
     const gastosOp=it.admin+it.comercial+it.logistica+it.financiamiento+it.garantiaMXN;
     const tip=`Admin ${fMXN(it.admin)} · Comercial ${fMXN(it.comercial)} · Logística ${fMXN(it.logistica)} · Financ. ${fMXN(it.financiamiento)} · Garantías ${fMXN(it.garantiaMXN)}`;
@@ -1169,7 +1181,7 @@ function secIntegral(R){
   }).join("");
   return head("Costeo integral por inserto","COSTEO_INTEGRAL",
     "Material y precio cliente se conservan de cada inserto (azul, editable). La conversión viene de la ruta con tarifas por centro. Admin/comercial/logística se aplican sobre la conversión; financiamiento y garantías sobre el costo previo. Margen sobre venta ≠ markup.")
-  +`<div class="filterbar">${periodoSelector()}<span class="hint">${R.integral.length} insertos en la lista · ${R.readyCount} costeados. Pasa el cursor sobre <b>Gastos op.</b> para ver el desglose y sobre <b>Margen</b> para el markup.</span></div>
+  +`<div class="filterbar">${periodoSelector()}${clienteSelector()}<span class="hint">${R.integral.length} insertos en la lista · ${R.readyCount} costeados. Pasa el cursor sobre <b>Gastos op.</b> para ver el desglose y sobre <b>Margen</b> para el markup.</span></div>
     <div class="tabla-integral"><table class="compact"><thead><tr>
     <th class="l">Inserto</th><th>Vol.<br>mensual</th><th>Mat.<br>(USD)</th><th>%<br>Merma</th><th>Material<br>(MXN)</th>
     <th>Conversión<br>(MXN)</th><th>Gastos op.<br>(MXN)</th><th>Costo<br>integral</th>
@@ -1272,6 +1284,7 @@ document.addEventListener("change",e=>{
 
 /* ---------- COSTEO DE PLACAS (diseño de material por inserto) ---------- */
 let disenoSel=null;
+let cliVista="(todos)";
 function secDiseno(R){
   if(!S.inserts.length) return head("Costeo de placas","INSERTO","")+`<div class="note">Aún no hay insertos. Agrégalos en la sección Costeo integral.</div>`;
   if(disenoSel==null||!S.inserts.some(x=>String(x.id)===String(disenoSel))) disenoSel=String(S.inserts[0].id);
@@ -1436,7 +1449,7 @@ function secDiagrama(R){
   const idx=S.inserts.findIndex(x=>String(x.id)===String(disenoSel));
   const ins=S.inserts[idx]; ensureDiseno(ins);
   const dz=disenoCalc(ins)||{mats:ins.diseno.materiales.map(matEff),piezas:[]};
-  const insOpts=S.inserts.map(x=>`<option ${String(x.id)===String(disenoSel)?'selected':''}>${escapeHtml(String(x.id))}</option>`).join("");
+  const insOpts=S.inserts.filter(pasaCliente).map(x=>`<option ${String(x.id)===String(disenoSel)?'selected':''}>${escapeHtml(String(x.id))}</option>`).join("");
   let blocks="", usedArea=0, plateAreaTot=0, hay=false;
   dz.piezas.forEach(p=>{
     const mat=dz.mats[(num(p.mat)||1)-1]||matEff({});
@@ -1500,8 +1513,9 @@ function secDiagrama(R){
     </div>` : "";
   return head("Diagrama de corte — orientación óptima de láminas","OPTIMIZACIÓN DE CORTE",
     "Para cada pieza se dibuja la mejor orientación de corte en la lámina (la que rinde más piezas por placa), comparando las dos orientaciones. <b>Verde</b> = superficie aprovechada; <b>gris rayado</b> = merma (recorte). Cambia las medidas en Costeo de placas y el diagrama se actualiza.")
-  +`<div class="exsel" style="display:inline-flex;margin-bottom:6px"><span>Inserto</span>
-      <select onchange="app.setDiagrama(this.value)">${insOpts}</select></div>
+  +`<div class="filterbar">${clienteSelector("setCliDiagrama")}
+      <div class="exsel" style="display:inline-flex"><span>Inserto</span>
+        <select onchange="app.setDiagrama(this.value)">${insOpts}</select></div></div>
     ${resumen}${blocks}${nestSec}`;
 }
 
@@ -1514,6 +1528,24 @@ function nombreMes(k){
   const [y,m]=k.split("-").map(Number);
   const N=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
   return (N[m-1]||"")+" "+y;
+}
+function periodoTieneDatos(k){
+  const P=(S.periodos||{})[k]; if(!P) return false;
+  const items=Object.values(P.items||{}).some(c=>c&&(c.inc||num(c.vol)>0));
+  const otros=["indirectos","capacidad","energia","mano"].some(g=>P[g]&&Object.keys(P[g]).length);
+  return items||otros;
+}
+function estadoPeriodo(k){
+  if(!k||k==="catalogo"||String(k).indexOf("anio:")===0) return null;
+  const P=(S.periodos||{})[k]||{};
+  if(P.estado==="cerrado") return "cerrado";
+  return periodoTieneDatos(k)?"borrador":"vacio";
+}
+function badgePeriodo(k){
+  const e=estadoPeriodo(k); if(!e) return "";
+  if(e==="cerrado") return `<span class="pill ok" title="Mes cerrado">Cerrado</span>`;
+  if(e==="borrador") return `<span class="pill" style="background:var(--amberBg);color:#8a6100" title="Datos capturados sin cerrar">Borrador</span>`;
+  return `<span class="pill" style="background:var(--grayBg);color:var(--muted)" title="Sin datos capturados">Sin datos</span>`;
 }
 function computeMes(R,k){
   const P=ensurePeriodo(k||periodoKey());
@@ -1594,12 +1626,14 @@ function secMes(R){
         <input type="month" class="f" style="width:140px" value="${escapeHtml(k)}" onchange="app.setPeriodo(this.value)"></div>
       <div class="exsel" style="display:inline-flex"><span>Cliente</span>
         <select onchange="app.setCliFiltro(this.value)">${cliLista.map(c=>`<option ${c===cliFiltro?'selected':''}>${escapeHtml(c)}</option>`).join("")}</select></div>
-      <span class="hint">${nombreMes(k)} · ${M.act.length} insertos · ${fN(M.piezas,0)} pzas${hist.length>1?(' · '+hist.length+' periodos guardados'):''}</span>
+      ${badgePeriodo(k)}<span class="hint">${nombreMes(k)} · ${M.act.length} insertos · ${fN(M.piezas,0)} pzas${hist.length>1?(' · '+hist.length+' periodos guardados'):''}</span>
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
         <button class="rowbtn" style="margin:0" onclick="app.mesTodos(true)">Marcar todos</button>
         <button class="rowbtn" style="margin:0" onclick="app.mesTodos(false)">Desmarcar</button>
         <button class="rowbtn" style="margin:0" onclick="app.mesCopiarVol()">Traer volúmenes del catálogo</button>
         <button class="rowbtn" style="margin:0" onclick="app.mesAplicarPanel()">Aplicar al panel</button>
+        <button class="rowbtn" style="margin:0" onclick="app.mesCerrar()">${((S.periodos[k]||{}).estado==="cerrado")?"Reabrir mes":"Cerrar mes"}</button>
+        ${esAdmin()?`<button class="rowbtn" style="margin:0;border-color:var(--red);color:var(--red)" onclick="app.mesBorrar()">Borrar mes</button>`:""}
       </div>
     </div>
 
@@ -1946,6 +1980,41 @@ function avisoPeriodo(){
   if(!periodoEditable()) return "promedio de los meses capturados (solo lectura)";
   return "captura el valor de este mes; en blanco usa el del catálogo";
 }
+const confirmPinClear=false;
+const ROLES={admin:"Administrador",captura:"Captura",consulta:"Consulta"};
+let ROL=(function(){ try{ return sessionStorage.getItem("nf_rol")||"admin"; }catch(e){ return "admin"; } })();
+function setRol(r){ ROL=r; try{ sessionStorage.setItem("nf_rol",r); }catch(e){} }
+function esAdmin(){ return ROL==="admin"; }
+function puedeEditar(){ return ROL==="admin"||ROL==="captura"; }
+function hashPin(t){ let h=5381; t=String(t); for(let i=0;i<t.length;i++){ h=((h<<5)+h+t.charCodeAt(i))>>>0; } return "h"+h.toString(36); }
+function pedirPin(msg,onOk){
+  const cfg=(S.seguridad||{}).pin;
+  if(!cfg){ onOk(); return; }
+  const ov=document.createElement("div"); ov.className="modal-ov";
+  const m=document.createElement("div"); m.className="modal";
+  m.innerHTML=`<div class="modal-msg">${msg}<br><br><input type="password" class="f" style="width:100%;text-align:left" placeholder="Contraseña" data-pinbox></div>
+    <div class="modal-actions"><button class="btn" type="button" data-no>Cancelar</button><button class="btn danger" type="button" data-yes>Confirmar</button></div>`;
+  ov.appendChild(m); document.body.appendChild(ov);
+  const box=m.querySelector("[data-pinbox]");
+  const close=()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  m.querySelector("[data-no]").onclick=close;
+  m.querySelector("[data-yes]").onclick=()=>{
+    if(hashPin(box.value)===cfg){ close(); onOk(); }
+    else { box.style.borderColor="var(--red)"; box.value=""; box.placeholder="Contraseña incorrecta"; }
+  };
+  box.onkeydown=ev=>{ if(ev.key==="Enter") m.querySelector("[data-yes]").click(); };
+  setTimeout(()=>{try{box.focus();}catch(e){}},50);
+}
+function clienteSelector(fn){
+  const cur=cliVista||"(todos)";
+  const lista=["(todos)"].concat([...new Set(S.inserts.map(i=>clienteLabel(i)))].sort());
+  if(!lista.includes(cur)) cliVista="(todos)";
+  return `<div class="exsel" style="display:inline-flex"><span>Cliente</span>
+    <select onchange="app.${fn||'setCliVista'}(this.value)">
+      ${lista.map(c=>`<option ${c===cliVista?'selected':''}>${escapeHtml(c)}</option>`).join("")}
+    </select></div>`;
+}
+function pasaCliente(ins){ return cliVista==="(todos)"||clienteLabel(ins)===cliVista; }
 function periodoSelector(){
   const cur=S.periodoVista||"catalogo";
   return `<div class="exsel" style="display:inline-flex"><span>Periodo</span>
@@ -2082,11 +2151,13 @@ function renderSection(id){
   const map={dashboard:secDashboard,mes:secMes,presupuesto:secPresupuesto,resumen:secResumen,control:secControl,capacidad:secCapacidad,mano:secMano,
     indirectos:secIndirectos,energia:secEnergia,centros:secCentros,
     ruta:secRuta,financiero:secFinanciero,integral:secIntegral,placas:secDiseno,diagrama:secDiagrama,validacion:secValidacion};
-  document.getElementById("content").innerHTML=(map[id]||secDashboard)(R);
+  const cont=document.getElementById("content");
+  cont.className="content"+(puedeEditar()?"":" ro");
+  cont.innerHTML=(map[id]||secDashboard)(R);
   if(id==="dashboard") buildDashboardCharts(R);
   if(id==="presupuesto") buildPresupuestoCharts(R);
 }
-function renderAll(){renderNav();renderKPIs();renderChain();renderSection(current);}
+function renderAll(){renderNav();renderRol();renderKPIs();renderChain();renderSection(current);}
 
 /* ===================== EXPORTACIÓN (Excel / PDF) ===================== */
 const r2=x=>x==null?null:Math.round(x*100)/100;
@@ -2343,6 +2414,52 @@ const app={
     askConfirm("¿Limpiar los montos capturados de <b>"+etiquetaPeriodo(k)+"</b>? Volverán a tomar el valor del catálogo.",()=>{
       const P=ensurePeriodo(k); P.indirectos={}; save(); renderKPIs(); renderChain(); renderSection("indirectos"); toast("Montos del mes limpiados");
     },"Limpiar"); },
+  mesCerrar(){ const k=periodoKey(); const P=ensurePeriodo(k);
+    P.estado=(P.estado==="cerrado")?null:"cerrado"; save(); renderSection("mes");
+    toast(P.estado==="cerrado"?(nombreMes(k)+" cerrado"):(nombreMes(k)+" reabierto")); },
+  mesBorrar(){ const k=periodoKey();
+    if(!esAdmin()){ toast("Solo el Administrador puede borrar un periodo"); return; }
+    askConfirm("¿Borrar TODOS los datos capturados de <b>"+nombreMes(k)+"</b>?<br><br>Se eliminan volúmenes, clientes del mes y los montos de indirectos, capacidad, energía y nómina de ese periodo. El catálogo de insertos no se toca.",()=>{
+      pedirPin("Confirma con la contraseña para borrar <b>"+nombreMes(k)+"</b>.",()=>{
+        delete S.periodos[k];
+        if(S.periodoVista===k) S.periodoVista="catalogo";
+        save(); renderKPIs(); renderChain(); renderSection("mes"); toast(nombreMes(k)+" borrado");
+      });
+    },"Borrar mes"); },
+  setCliVista(v){ cliVista=v; renderSection(current); },
+  setCliDiagrama(v){ cliVista=v; const l=S.inserts.filter(pasaCliente); if(l.length&&!l.some(x=>String(x.id)===String(disenoSel))) disenoSel=String(l[0].id); renderSection("diagrama"); },
+  abrirAcceso(){
+    const tienePin=!!(S.seguridad||{}).pin;
+    const ov=document.createElement("div"); ov.className="modal-ov";
+    const m=document.createElement("div"); m.className="modal";
+    m.innerHTML=`<div class="modal-msg"><b>Acceso y permisos</b><br><br>
+      Perfil actual: <b>${ROLES[ROL]}</b><br><br>
+      <select class="f" style="width:100%;text-align:left" data-rolsel>
+        <option value="admin" ${ROL==="admin"?"selected":""}>Administrador — captura, borra periodos y define la contraseña</option>
+        <option value="captura" ${ROL==="captura"?"selected":""}>Captura — puede capturar datos, no borrar periodos</option>
+        <option value="consulta" ${ROL==="consulta"?"selected":""}>Consulta — solo lectura</option>
+      </select>
+      <div style="margin-top:12px;font-size:12px;color:var(--muted)">
+        ${tienePin?"Se pedirá la contraseña para entrar como Administrador o Captura.":"Sin contraseña definida. Como Administrador puedes definirla abajo."}
+      </div>
+      ${esAdmin()?`<div style="margin-top:12px"><input type="password" class="f" style="width:100%;text-align:left" placeholder="${tienePin?'Nueva contraseña (vacío = quitar)':'Definir contraseña'}" data-newpin></div>`:""}
+      </div>
+      <div class="modal-actions"><button class="btn" type="button" data-no>Cerrar</button><button class="btn primary" type="button" data-yes>Aplicar</button></div>`;
+    ov.appendChild(m); document.body.appendChild(ov);
+    const close=()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+    m.querySelector("[data-no]").onclick=close;
+    m.querySelector("[data-yes]").onclick=()=>{
+      const nuevo=m.querySelector("[data-rolsel]").value;
+      const np=m.querySelector("[data-newpin]");
+      if(np&&esAdmin()){
+        if(np.value===""){ if(tienePin&&confirmPinClear===false){} }
+        if(np.value!==""){ S.seguridad=S.seguridad||{}; S.seguridad.pin=hashPin(np.value); save(); }
+      }
+      const aplicar=()=>{ setRol(nuevo); close(); renderAll(); toast("Perfil: "+ROLES[nuevo]); };
+      if((nuevo==="admin"||nuevo==="captura")&&(S.seguridad||{}).pin&&!puedeEditar()){ close(); pedirPin("Escribe la contraseña para entrar como <b>"+ROLES[nuevo]+"</b>.",aplicar); }
+      else aplicar();
+    };
+  },
   setPeriodoVista(v){ S.periodoVista=v||"catalogo"; save(); renderKPIs(); renderChain(); renderSection(current); toast("Consultando "+etiquetaPeriodo(S.periodoVista)); },
   setPresuPeriodo(v){ S.periodoVista=v||"catalogo"; save(); renderKPIs(); renderChain(); renderSection("presupuesto"); },
   setPeriodo(v){ if(!v) return; S.periodoActivo=v; ensurePeriodo(v); save(); renderSection("mes"); },

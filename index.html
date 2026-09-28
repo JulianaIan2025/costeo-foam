@@ -267,6 +267,8 @@ td.sua-off{background:repeating-linear-gradient(45deg,#f6f8f9,#f6f8f9 4px,#eef2f
 const CENTROS=["Corte/Pegado/Ensamble","Empaque y Almacén / Manejo","Administración"];
 const CENTRO_PROD="Corte/Pegado/Ensamble";
 const PROCESOS=["Corte/Pegado/Ensamble"];
+const ABREV={"Corte/Pegado/Ensamble":"Corte/Peg./Ens.","Empaque y Almacén / Manejo":"Empaque/Almacén","Administración":"Admin."};
+function abrev(t){ t=String(t||""); return ABREV[t]||t; }
 const TIPOS=["Directa","Administrativa","Comercial"];
 const PERIOD=["Semanal","Mensual"];
 const CLASES=["Directo","Indirecto variable","Indirecto fijo","Administrativo","Comercial","Logístico","Financiero"];
@@ -1110,8 +1112,8 @@ function secRuta(R){
     <td class="l">${sel(`ruta.${i}.ins`,S.inserts.map(x=>x.id))}</td>
     <td class="l" title="Se define en Costeo de placas">${escapeHtml(clienteLabel(insDe(r.ins)))}</td>
     <td>${inp(`ruta.${i}.op`)}</td>
-    <td class="l val-calc">${escapeHtml(String(r.proc||CENTRO_PROD))}</td>
-    <td class="l val-calc">${escapeHtml(String(r.ce||CENTRO_PROD))}</td>
+    <td class="l val-calc" title="${escapeHtml(String(r.proc||CENTRO_PROD))}">${escapeHtml(abrev(r.proc||CENTRO_PROD))}</td>
+    <td class="l val-calc" title="${escapeHtml(String(r.ce||CENTRO_PROD))}">${escapeHtml(abrev(r.ce||CENTRO_PROD))}</td>
     <td>${inp(`ruta.${i}.prep`,{ph:"PEND"})}</td>
     <td>${inp(`ruta.${i}.lote`)}</td>
     <td>${inp(`ruta.${i}.minMO`,{ph:"PEND"})}</td>
@@ -1127,9 +1129,9 @@ function secRuta(R){
     <div class="exsel" style="display:inline-flex"><span>Inserto</span>
       <select onchange="app.setRutaFilter(this.value)">${insOpts.map(o=>`<option ${o===rutaFilter?'selected':''}>${escapeHtml(o)}</option>`).join("")}</select></div>
     <span class="hint">${shown.length} operación(es)</span></div>
-    <div class="scroll"><table><thead><tr>
-    <th class="l">Inserto</th><th class="l">Cliente</th><th>Op</th><th class="l">Proceso</th><th class="l">Centro</th><th>Min prep/lote</th><th>Lote</th>
-    <th>Min MO/u</th><th>N° op.</th><th>% retrab.</th><th>% merma</th><th>Costo total/u</th><th class="l">Estado</th><th></th>
+    <div class="tabla-integral"><table class="compact"><thead><tr>
+    <th class="l">Inserto</th><th class="l">Cliente</th><th>Op</th><th class="l">Proceso</th><th class="l">Centro</th><th>Min prep/<br>lote</th><th>Lote</th>
+    <th>Min MO/u</th><th>N°<br>op.</th><th>%<br>retrab.</th><th>%<br>merma</th><th>Costo<br>total/u</th><th class="l">Estado</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
     <button class="rowbtn" onclick="app.addRuta()">+ Agregar operación</button>
     <button class="rowbtn" onclick="app.rutasEstandar()">Aplicar ruta estándar (Corte/Pegado/Ensamble) a todos</button>`;

@@ -448,10 +448,10 @@ function disenoCalc(ins){
     const o1=(m1>0&&m2>0&&M.largo>0&&M.ancho>0)?Math.floor(M.largo/m1)*Math.floor(M.ancho/m2):0;
     const o2=(m1>0&&m2>0&&M.largo>0&&M.ancho>0)?Math.floor(M.largo/m2)*Math.floor(M.ancho/m1):0;
     const ppp=(p.piezasManual!=null&&p.piezasManual!=="")?num(p.piezasManual):Math.max(o1,o2);
-    // Placa suajada: el material del suaje se recupera para otros insertos → no se costea
+    // Placa suajada: un suaje por pieza → total de suajes = cantidad por inserto
     const esSuaje=(p.comp==="Placa suajada");
     const areaBruta=m1*m2;
-    const recArea=esSuaje?Math.min(areaBruta, num(p.s1)*num(p.s2)*Math.max(1,num(p.sn)||1)):0;
+    const recArea=esSuaje?Math.min(areaBruta, num(p.s1)*num(p.s2)):0;
     const areaNeta=Math.max(0,areaBruta-recArea);
     const factorRec=(areaBruta>0)?(areaNeta/areaBruta):1;
     const costoBruto=ppp>0?M.precio/ppp:0;
@@ -1263,7 +1263,7 @@ function secDiseno(R){
     <td>${inp(`inserts.${idx}.diseno.piezas.${j}.cant`)}</td>
     <td class="${p.esSuaje?'':'sua-off'}" title="Medidas del hueco suajado (material recuperable)">${p.esSuaje?fracInput(`inserts.${idx}.diseno.piezas.${j}.s1`,'0'):'<span class="hint">—</span>'}</td>
     <td class="${p.esSuaje?'':'sua-off'}">${p.esSuaje?fracInput(`inserts.${idx}.diseno.piezas.${j}.s2`,'0'):'<span class="hint">—</span>'}</td>
-    <td class="${p.esSuaje?'':'sua-off'}" title="Cuántos huecos suajados tiene la pieza">${p.esSuaje?inp(`inserts.${idx}.diseno.piezas.${j}.sn`):'<span class="hint">—</span>'}</td>
+    <td class="${p.esSuaje?'':'sua-off'}" title="Un suaje por pieza: igual a la cantidad por inserto">${p.esSuaje?`<span class="mono val-calc">${fN(num(p.cant),0)}</span>`:'<span class="hint">—</span>'}</td>
     <td class="mono val-calc" title="Área recuperada que NO se costea">${p.esSuaje?fPct(p.recPct):'<span class="hint">—</span>'}</td>
     <td class="mono val-calc">${p.o1} / ${p.o2}</td>
     <td>${ovInput(`inserts.${idx}.diseno.piezas.${j}.piezasManual`,String(Math.max(p.o1,p.o2)))}</td>
@@ -1310,10 +1310,10 @@ function secDiseno(R){
 
     <div class="card" style="margin-top:16px"><h3>Piezas / componentes</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
       <table class="compact"><thead><tr><th class="l">Componente</th><th>Medida 1<br>in</th><th>Medida 2<br>in</th><th>Grosor<br>in</th><th>Mat.</th><th>Cant./<br>inserto</th>
-      <th title="Solo para Placa suajada">Suaje<br>med. 1</th><th title="Solo para Placa suajada">Suaje<br>med. 2</th><th title="Número de huecos suajados">N°<br>suajes</th><th title="Área recuperada que no se costea">Recup.</th>
+      <th title="Solo para Placa suajada">Suaje<br>med. 1</th><th title="Solo para Placa suajada">Suaje<br>med. 2</th><th title="Un suaje por pieza; igual a la cantidad por inserto">N°<br>suajes</th><th title="Área recuperada que no se costea">Recup.</th>
       <th>Pzas/placa<br>(o1/o2)</th><th>Pzas/placa<br>(usar)</th><th>Aprov.</th><th>Costo<br>unit. $</th><th>Costo<br>inserto $</th><th></th></tr></thead>
       <tbody>${pRows||`<tr><td colspan="12" class="l" style="color:var(--muted2)">Sin piezas. Agrega la primera con el botón de abajo.</td></tr>`}</tbody></table></div>
-      <div class="hint" style="padding:6px 12px">Las medidas aceptan fracciones (17 3/4). En <b>Placa suajada</b>, captura las medidas del hueco suajado: esa área se descuenta del costo porque el material recuperado se reutiliza en otro inserto — no se considera merma.</div>
+      <div class="hint" style="padding:6px 12px">Las medidas aceptan fracciones (17 3/4). En <b>Placa suajada</b>, captura las medidas del hueco: esa área se descuenta del costo porque el material recuperado se reutiliza en otro inserto — no es merma. El <b>N° de suajes</b> es fijo (un suaje por pieza), así que equivale a la cantidad por inserto.</div>
       <button class="rowbtn" onclick="app.addPieza(${idx})">+ Agregar pieza</button></div></div>
 
     <div class="grid2" style="margin-top:16px">
@@ -2259,7 +2259,7 @@ const app={
     sortInserts();
     disenoSel=v; save(); renderKPIs(); renderChain(); renderSection("placas"); toast("Inserto "+v+" creado");
   },
-  addPieza(idx){ ensureDiseno(S.inserts[idx]); S.inserts[idx].diseno.piezas.push({comp:"Tapa / Base",m1:null,m2:null,grosor:null,mat:1,cant:1,piezasManual:null}); save(); renderKPIs(); renderChain(); renderSection("placas"); },
+  addPieza(idx){ ensureDiseno(S.inserts[idx]); S.inserts[idx].diseno.piezas.push({comp:"Tapa / Base",m1:null,m2:null,grosor:null,mat:1,cant:1,piezasManual:null,s1:null,s2:null}); save(); renderKPIs(); renderChain(); renderSection("placas"); },
   delPieza(idx,j){ S.inserts[idx].diseno.piezas.splice(j,1); save(); renderKPIs(); renderChain(); renderSection("placas"); },
   addMaterial(){ if(!S.catalogo)S.catalogo=[]; S.catalogo.push({nombre:"NUEVO material",grosor:null,ancho:null,largo:null,costo:null}); save(); renderSection("placas"); },
   delMaterial(k){ S.catalogo.splice(k,1); save(); renderKPIs(); renderChain(); renderSection("placas"); },

@@ -372,7 +372,7 @@ const DEFAULTS={
     {nombre:"PE NEGRO #1.7 - 2.5\"",grosor:2.5,ancho:48,largo:108,costo:33.65},
     {nombre:"PE BLANCO #1.2 - 3\"",grosor:3,ancho:48,largo:108,costo:39.37},
     {nombre:"PE NEGRO #1.7 - 3\"",grosor:3,ancho:48,largo:108,costo:40.38},
-    {nombre:"PU GRIS #1.44 BUN - 45\"",grosor:45,ancho:83,largo:98,costo:1999.99},
+    {nombre:"PU GRIS #1.44 BUN - 45\"",grosor:45,ancho:83,largo:98,costo:1999.99,bloque:true},
     {nombre:"PU GRIS #1.44 CONVO - 1.5\"",grosor:1.5,ancho:40,largo:96,costo:32.13}
   ],
   perInsert:{ /* id -> {mermaMat, margenObj(null=default), garantia} */ },
@@ -446,7 +446,8 @@ function matEff(slot){
   slot=slot||{}; const c=catFind(slot.nombre)||{};
   const pick=(v,cv)=>(v!=null&&v!=="")?num(v):(cv!=null?num(cv):0);
   return {nombre:slot.nombre||"",precio:pick(slot.precio,c.costo),largo:pick(slot.largo,c.largo),
-          ancho:pick(slot.ancho,c.ancho),grosor:pick(slot.grosor,c.grosor)};
+          ancho:pick(slot.ancho,c.ancho),grosor:pick(slot.grosor,c.grosor),
+          bloque:(slot.bloque!==undefined?!!slot.bloque:!!c.bloque)};
 }
 function disenoCalc(ins){
   const d=ins.diseno; if(!d||!d.piezas||!d.piezas.length) return null;
@@ -456,7 +457,12 @@ function disenoCalc(ins){
     const m1=num(p.m1),m2=num(p.m2);
     const o1=(m1>0&&m2>0&&M.largo>0&&M.ancho>0)?Math.floor(M.largo/m1)*Math.floor(M.ancho/m2):0;
     const o2=(m1>0&&m2>0&&M.largo>0&&M.ancho>0)?Math.floor(M.largo/m2)*Math.floor(M.ancho/m1):0;
-    const ppp=(p.piezasManual!=null&&p.piezasManual!=="")?num(p.piezasManual):Math.max(o1,o2);
+    const pppArea=Math.max(o1,o2);
+    const esBloque=!!M.bloque;
+    const gPieza=num(p.grosor);
+    const capas=(esBloque&&gPieza>0&&num(M.grosor)>0)?Math.floor(num(M.grosor)/gPieza):1;
+    const pppAuto=pppArea*Math.max(1,capas);
+    const ppp=(p.piezasManual!=null&&p.piezasManual!=="")?num(p.piezasManual):pppAuto;
     // Placa suajada: un suaje por pieza → total de suajes = cantidad por inserto
     const esSuaje=(p.comp==="Placa suajada");
     const areaBruta=m1*m2;
@@ -468,7 +474,7 @@ function disenoCalc(ins){
     const cant=num(p.cant);
     const areaPl=M.largo*M.ancho;
     const aprov=(areaPl>0)?(ppp*areaBruta)/areaPl:0;
-    return {...p,o1,o2,ppp,orient:(o2>o1?"Orient. 2":"Orient. 1"),costoBruto,costoUnit,
+    return {...p,o1,o2,ppp,pppArea,esBloque,capas,orient:(o2>o1?"Orient. 2":"Orient. 1"),costoBruto,costoUnit,
             costoInserto:costoUnit*cant,aprov,esSuaje,areaBruta,recArea,areaNeta,factorRec,
             recPct:(areaBruta>0?recArea/areaBruta:0)};
   });
@@ -1237,6 +1243,11 @@ function sortInserts(){
   S.inserts.sort((a,b)=>String(a.id==null?"":a.id).localeCompare(String(b.id==null?"":b.id),undefined,{numeric:true,sensitivity:"base"}));
 }
 document.addEventListener("change",e=>{
+  const el=e.target; if(!el.dataset||el.dataset.blk===undefined) return;
+  const k=+el.dataset.blk; if(S.catalogo&&S.catalogo[k]) S.catalogo[k].bloque=el.checked;
+  save(); renderKPIs(); renderChain(); renderSection("placas");
+});
+document.addEventListener("change",e=>{
   const el=e.target; if(!el.dataset||el.dataset.ov===undefined) return;
   const [grupo,clave]=String(el.dataset.ov).split("|");
   let v=null;
@@ -1314,7 +1325,7 @@ function secDiseno(R){
       <td>${delCat?`<span class="val-link mono" title="Del catálogo">${fUSD(eff.precio)}</span>`:ovInput(`inserts.${idx}.diseno.materiales.${k}.precio`,'$ placa')}</td>
       <td>${delCat?`<span class="val-link mono" title="Del catálogo">${toFrac(eff.largo)||'—'}</span>`:fracInput(`inserts.${idx}.diseno.materiales.${k}.largo`,'in')}</td>
       <td>${delCat?`<span class="val-link mono" title="Del catálogo">${toFrac(eff.ancho)||'—'}</span>`:fracInput(`inserts.${idx}.diseno.materiales.${k}.ancho`,'in')}</td>
-      <td>${delCat?`<span class="val-link mono" title="Grosor del material seleccionado">${toFrac(eff.grosor)||'—'}</span>`:fracInput(`inserts.${idx}.diseno.materiales.${k}.grosor`,'in')}</td>
+      <td>${delCat?`<span class="val-link mono" title="${eff.bloque?'Espesor del bloque (se corta en capas)':'Grosor del material seleccionado'}">${toFrac(eff.grosor)||'—'}${eff.bloque?' <span class="hint">bloque</span>':''}</span>`:fracInput(`inserts.${idx}.diseno.materiales.${k}.grosor`,'in')}</td>
       <td class="mono val-calc">${(eff.largo>0&&eff.ancho>0)?fN(eff.largo*eff.ancho,0)+' in²':'—'}</td></tr>`;
   }).join("");
 
@@ -1323,13 +1334,13 @@ function secDiseno(R){
     <td>${fracInput(`inserts.${idx}.diseno.piezas.${j}.m1`,'0')}</td>
     <td>${fracInput(`inserts.${idx}.diseno.piezas.${j}.m2`,'0')}</td>
     <td>${selRaw(`inserts.${idx}.diseno.piezas.${j}.mat`,["1","2","3"],String(p.mat||1))}</td>
-    <td class="mono val-link" title="Grosor del material asignado">${(function(){const M=dz.mats[(num(p.mat)||1)-1]||{};return M.grosor>0?toFrac(M.grosor):'<span class="hint">—</span>';})()}</td>
+    <td>${p.esBloque?fracInput(`inserts.${idx}.diseno.piezas.${j}.grosor`,'0'):`<span class="mono val-link" title="Grosor del material asignado">${(function(){const M=dz.mats[(num(p.mat)||1)-1]||{};return M.grosor>0?toFrac(M.grosor):'<span class="hint">—</span>';})()}</span>`}</td>
     <td>${inp(`inserts.${idx}.diseno.piezas.${j}.cant`)}</td>
     <td class="${p.esSuaje?'':'sua-off'}" title="Medidas del hueco suajado (material recuperable)">${p.esSuaje?fracInput(`inserts.${idx}.diseno.piezas.${j}.s1`,'0'):'<span class="hint">—</span>'}</td>
     <td class="${p.esSuaje?'':'sua-off'}">${p.esSuaje?fracInput(`inserts.${idx}.diseno.piezas.${j}.s2`,'0'):'<span class="hint">—</span>'}</td>
     <td class="${p.esSuaje?'':'sua-off'}" title="Un suaje por pieza: igual a la cantidad por inserto">${p.esSuaje?`<span class="mono val-calc">${fN(num(p.cant),0)}</span>`:'<span class="hint">—</span>'}</td>
     <td class="mono val-calc" title="Área recuperada que NO se costea">${p.esSuaje?fPct(p.recPct):'<span class="hint">—</span>'}</td>
-    <td class="mono val-calc">${p.o1} / ${p.o2}</td>
+    <td class="mono val-calc" title="${p.esBloque?('Bloque: '+p.capas+' capa(s) de '+toFrac(num(p.grosor))+'\" × '+p.pppArea+' pzas por capa'):'Piezas por placa'}">${p.esBloque?(p.pppArea+' × '+p.capas):(p.o1+' / '+p.o2)}</td>
     <td>${ovInput(`inserts.${idx}.diseno.piezas.${j}.piezasManual`,String(Math.max(p.o1,p.o2)))}</td>
     <td class="mono val-calc">${fPct(p.aprov)}</td>
     <td class="mono val-calc" title="${p.esSuaje?('Bruto '+fUSD(p.costoBruto)+' menos el suaje recuperado'):''}">${fUSD(p.costoUnit)}</td>
@@ -1343,6 +1354,7 @@ function secDiseno(R){
     <td>${fracInput(`catalogo.${k}.ancho`,'in')}</td>
     <td>${fracInput(`catalogo.${k}.largo`,'in')}</td>
     <td>${inp(`catalogo.${k}.costo`)}</td>
+    <td style="text-align:center"><input type="checkbox" data-blk="${k}" ${m.bloque?'checked':''} title="Bloque: se corta en capas y el grosor se captura por pieza"></td>
     <td><button class="del" onclick="app.delMaterial(${k})">✕</button></td></tr>`).join("");
 
   return head("Costeo de placas — optimización de corte","INSERTO (hoja individual del Excel)",
@@ -1375,9 +1387,9 @@ function secDiseno(R){
     <div class="card" style="margin-top:16px"><h3>Piezas / componentes</h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
       <table class="compact"><thead><tr><th class="l">Componente</th><th>Medida 1<br>in</th><th>Medida 2<br>in</th><th>Mat.</th><th>Grosor<br>in</th><th>Cant./<br>inserto</th>
       <th title="Solo para Placa suajada">Suaje<br>med. 1</th><th title="Solo para Placa suajada">Suaje<br>med. 2</th><th title="Un suaje por pieza; igual a la cantidad por inserto">N°<br>suajes</th><th title="Área recuperada que no se costea">Recup.</th>
-      <th>Pzas/placa<br>(o1/o2)</th><th>Pzas/placa<br>(usar)</th><th>Aprov.</th><th>Costo<br>unit. $</th><th>Costo<br>inserto $</th><th></th></tr></thead>
+      <th>Pzas/placa<br>(o1/o2 · bloque)</th><th>Pzas/placa<br>(usar)</th><th>Aprov.</th><th>Costo<br>unit. $</th><th>Costo<br>inserto $</th><th></th></tr></thead>
       <tbody>${pRows||`<tr><td colspan="12" class="l" style="color:var(--muted2)">Sin piezas. Agrega la primera con el botón de abajo.</td></tr>`}</tbody></table></div>
-      <div class="hint" style="padding:6px 12px">Las medidas aceptan fracciones (17 3/4). El <b>grosor</b> lo toma del material seleccionado, no se captura. En <b>Placa suajada</b>, captura las medidas del hueco: esa área se descuenta del costo porque el material recuperado se reutiliza en otro inserto — no es merma. El <b>N° de suajes</b> es fijo (un suaje por pieza), así que equivale a la cantidad por inserto.</div>
+      <div class="hint" style="padding:6px 12px">Las medidas aceptan fracciones (17 3/4). El <b>grosor</b> lo toma del material seleccionado. La excepción son los materiales marcados como <b>bloque</b> (ej. PU BUN): ahí sí capturas el grosor de la pieza y el sistema calcula cuántas capas salen del bloque. En <b>Placa suajada</b>, captura las medidas del hueco: esa área se descuenta del costo porque el material recuperado se reutiliza en otro inserto — no es merma. El <b>N° de suajes</b> es fijo (un suaje por pieza), así que equivale a la cantidad por inserto.</div>
       <button class="rowbtn" onclick="app.addPieza(${idx})">+ Agregar pieza</button></div></div>
 
     <div class="grid2" style="margin-top:16px">
@@ -1395,7 +1407,7 @@ function secDiseno(R){
     </div>
 
     <div class="card" style="margin-top:16px"><h3>Catálogo de placas (materiales) <span class="hint" style="font-weight:400">— compartido por todos los insertos</span></h3><div class="body"><div class="scroll" style="border:0;box-shadow:none">
-      <table><thead><tr><th class="l">Material</th><th>Grosor in</th><th>Ancho in</th><th>Largo in</th><th>Costo placa $</th><th></th></tr></thead>
+      <table><thead><tr><th class="l">Material</th><th>Grosor in</th><th>Ancho in</th><th>Largo in</th><th>Costo placa $</th><th title="Se corta en capas al grosor requerido">Bloque</th><th></th></tr></thead>
       <tbody>${catRows}</tbody></table></div>
       <button class="rowbtn" onclick="app.addMaterial()">+ Agregar material</button>
       <div class="hint" style="padding:6px 12px">Al actualizar el precio o medida de una placa aquí, se recalculan todos los insertos que la usan.</div></div></div>`;

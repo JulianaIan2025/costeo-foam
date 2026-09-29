@@ -1,70 +1,97 @@
-# Costeo FOAM Integral — Consola North Foam
+# Costeo integral · North Foam
 
-Aplicación web de una sola página (HTML autónomo) para el costeo integral de insertos de foam:
-costeo de placas y corte, ruta de proceso, centros de costo, costo integral, precio, panel
-ejecutivo, presupuesto y punto de equilibrio, con escenarios (Base/Conservador/Estrés) y
-exportación a Excel y PDF.
+Aplicación financiera adaptada del repositorio `linjorgeuribe-dev/costeo-foam`, revisión base `e9ad524`.
 
-- **Archivo único:** `index.html` (no requiere build ni servidor).
-- **Datos:** se guardan en el navegador de cada usuario (localStorage). No hay base de datos.
-- **Descargas:** Excel/PDF/JSON funcionan de forma nativa al alojarse en un sitio web normal.
+## Estado de esta entrega
 
----
+Versión local preparada para Vercel y PostgreSQL/Neon. No está desplegada en Vercel, no existe todavía una base Neon conectada y no se han cambiado registros DNS. La validación local utiliza PostgreSQL embebido (PGlite), sin datos reales. Falta verificar en los servicios definitivos después de crear las cuentas.
 
-## Despliegue en Vercel con GitHub (recomendado)
+## Funciones
 
-### 1. Crear el repositorio en GitHub
-1. Entra a https://github.com/new
-2. Nombre sugerido: `costeo-foam` · visibilidad **Private** (o Public, tú decides) · **Create repository**.
-3. Sube el archivo `index.html`:
-   - En la página del repo: **Add file → Upload files** → arrastra `index.html` → **Commit changes**.
-   - (Opcional) sube también este `README.md`.
+- Cuentas individuales con contraseñas protegidas mediante scrypt y sal aleatoria.
+- Sesiones de ocho horas, cookies HttpOnly, SameSite=Strict y Secure en producción; cierre e invalidación de sesiones.
+- Administrador: usuarios, edición, importación, restablecimiento y gestión de periodos.
+- Captura: lectura y edición; no puede borrar/cerrar/reabrir periodos ni modificar la captura de un periodo cerrado.
+- Consulta: lectura y exportaciones; el servidor rechaza las escrituras.
+- Contraseña temporal obligatoria en el primer acceso; recuperación mediante restablecimiento por un administrador. No incluye envío de correos de recuperación.
+- Persistencia compartida con control de versión. Si otra persona guarda primero, se rechaza la sobrescritura y se ofrece respaldar los cambios pendientes y recargar.
+- Registro de inicios de sesión, guardados y administración de usuarios, sin registrar contraseñas ni valores financieros.
+- Exportaciones Excel, PDF y JSON; importación JSON exclusiva del administrador y validada en el servidor.
+- Validación de solicitudes, protección de origen, límites de intentos de acceso y política de contenido que bloquea scripts en línea.
 
-> El `index.html` debe quedar en la **raíz** del repositorio.
+Se conservan las pantallas y el motor de cálculo original. La aplicación almacena un documento financiero compartido, no un libro contable transaccional. El cierre de periodo protege la captura mensual; no congela automáticamente una copia de todos los catálogos y fórmulas históricos. Los permisos son por rol para la aplicación completa, no por campo o departamento.
 
-### 2. Conectar el repo a Vercel
-1. Entra a https://vercel.com y **Sign up / Log in with GitHub**.
-2. **Add New… → Project**.
-3. **Import** el repositorio `costeo-foam` (autoriza a Vercel a leer tu GitHub si te lo pide).
-4. En la configuración del proyecto:
-   - **Framework Preset:** `Other`
-   - **Build Command:** *(vacío)*
-   - **Output Directory:** *(vacío)* — Vercel sirve la raíz con `index.html`
-   - **Install Command:** *(vacío)*
-5. **Deploy**.
+## Inicio limpio
 
-En ~20 segundos tendrás una URL tipo `https://costeo-foam.vercel.app`.
+Sin empleados, sueldos, costos indirectos, insertos, materiales, clientes ni capturas. Los parámetros comerciales y operativos se dejan vacíos o en cero; los factores de escenario comienzan neutrales (1; variación de margen 0). Se conservan nombres de centros/procesos y la conversión de semanas 52/12. El responsable debe configurar tipo de cambio, capacidad, cargas de nómina y márgenes antes de usar resultados operativos.
 
-### 3. Actualizaciones automáticas
-Cada vez que hagas **push** a la rama `main` (o subas un nuevo `index.html` desde GitHub),
-Vercel **redespliega solo**. No hay que hacer nada más.
+## Desarrollo local
 
-### 4. (Opcional) Dominio propio
-En Vercel: **Project → Settings → Domains → Add** y sigue las instrucciones de DNS
-(por ejemplo `costeo.northfoam.com`).
+Requiere Node.js 24 y npm.
 
----
+1. `npm ci`
+2. `npm run build`
+3. Crear un archivo local `.env`, excluido de Git, con:
 
-## Alternativa rápida sin GitHub (Vercel CLI)
-
-```bash
-npm i -g vercel
-cd carpeta-donde-esta-index.html
-vercel        # primer deploy (te pide login y confirmaciones)
-vercel --prod # publicar a producción
+```dotenv
+LOCAL_DATABASE=.local/database
+APP_ORIGIN=http://localhost:3100
 ```
 
-## Alternativa más rápida (arrastrar y soltar)
-En https://vercel.com → **Add New… → Project → Deploy** puedes **arrastrar la carpeta**
-que contiene `index.html`. Útil para una prueba inmediata (sin auto-redespliegue).
+4. `npm run db:migrate`
+5. Crear el primer administrador como se describe abajo.
+6. `npm run dev` y abrir `http://localhost:3100`.
 
----
+La base local es solo para desarrollo. Nunca configurar LOCAL_DATABASE en Vercel.
 
-## Notas
-- No se necesita `package.json` ni `vercel.json`: es un sitio estático de un archivo.
-- Las librerías (Chart.js, SheetJS, jsPDF) se cargan desde CDN público (cdnjs), permitido en Vercel.
-- Los datos capturados viven en el navegador de cada persona; para respaldos usa el botón
-  **Respaldar datos** (JSON) dentro de la app e **Importar** para restaurarlos.
-- El tipo de cambio se actualiza con el botón de TC oficial y los enlaces a Banxico/DOF.
-  Al estar ya en un sitio web propio, se puede habilitar la **consulta automática diaria**
-  del FIX (API de Banxico) — pídelo si lo quieres y lo agrego.
+## Pruebas
+
+- `npm test`: autenticación, permisos, contraseñas, invalidación de sesiones, validación de datos, límites de acceso, concurrencia y motor de cálculo.
+- `npm run test:browser`: navegación, captura, administración de usuarios, exportaciones y vista móvil; requiere Microsoft Edge instalado. Usa una base temporal independiente con cuentas aleatorias de prueba.
+- Una prueba adicional compara los cálculos contra el commit original si la historia Git está disponible. En el ZIP esa comparación se omite; la prueba de resultados conocidos se mantiene.
+
+## Vercel y Neon
+
+1. Crear las cuentas de Vercel y Neon bajo control de North Foam. Para el uso empresarial se contempla Vercel Pro; Neon Free está sujeto a sus límites actuales.
+2. Crear un proyecto PostgreSQL vacío en Neon. Elegir una región cercana a la función de Vercel. Obtener la conexión pooled privada.
+3. Preparar un `.env` local privado con `DATABASE_URL` y `APP_ORIGIN`. La conexión usa TLS con verificación de certificado.
+4. Ejecutar `npm run db:migrate`. La migración es idempotente y no reemplaza datos existentes.
+5. Crear el primer administrador con el procedimiento siguiente.
+6. Subir estos cambios a una rama del repositorio y revisarlos. La cuenta GitHub necesita permiso de escritura; conectar Vercel al repositorio autorizado.
+7. Importar en Vercel. Framework: Other. Node.js: 24.x. Build: `npm run build`. Output: `public`. Install: `npm ci`. La configuración de funciones y rutas está en `vercel.json`.
+8. Variables privadas de producción: `DATABASE_URL`, `APP_ORIGIN`. `BMX_TOKEN` es opcional y habilita la consulta de Banxico. No configurar ADMIN_PASSWORD como variable persistente en Vercel.
+9. Inicialmente APP_ORIGIN debe ser el origen exacto HTTPS del despliegue que se usará, sin barra final. Cuando se active el dominio definitivo, cambiarlo a `https://costeo.northfoamco.com` y redesplegar. Las escrituras desde otros dominios serán rechazadas intencionalmente.
+10. Usar una base o rama separada para previews; nunca copiar la conexión de producción a previews no controlados. Configurar el origen exacto del preview que se quiera probar.
+11. Verificar en Vercel: iniciar sesión, cambiar contraseña temporal, crear usuario de Consulta, guardar/recargar una captura, rechazar edición de Consulta y comprobar conflictos entre dos sesiones.
+
+## Primer administrador
+
+No hay credenciales predeterminadas ni una ruta pública de instalación.
+
+Proporcionar temporalmente en el entorno privado local (o en `.env`, excluido de Git): `ADMIN_EMAIL`, `ADMIN_NAME` y `ADMIN_PASSWORD` (mínimo 12 caracteres). Ejecutar `npm run admin:create`. El programa solo permite crear el primer usuario si aún no existe ninguno y exige cambiar la contraseña al ingresar. Retirar después las tres variables del archivo/entorno.
+
+Los siguientes usuarios se crean desde Acceso → Administrar usuarios. Para evitar pérdida de acceso, conviene que la empresa mantenga más de un administrador responsable. No enviar contraseñas por el repositorio ni incluirlas en documentación.
+
+## Dominio existente
+
+Dirección acordada: `costeo.northfoamco.com`.
+
+El administrador del dominio comprado desde Google Workspace debe entrar a Cuenta → Dominios → Administrar dominios → Ver detalles para localizar el registrador y su consola DNS.
+
+Agregar el dominio al proyecto de Vercel y copiar el registro específico que Vercel solicite para el host `costeo`. Usualmente será CNAME y, si corresponde, verificación TXT. No usar un destino supuesto ni cambiar los servidores de nombres o los registros del correo. Verificar HTTPS y el estado de validación en Vercel al terminar.
+
+## Respaldo y límites
+
+El botón Respaldar datos descarga el documento financiero en JSON; no incluye usuarios, contraseñas o bitácora. Antes de cambios relevantes, guardar un respaldo privado. Definir además respaldo completo de PostgreSQL y probar su restauración conforme a la operación de la empresa; esta entrega no automatiza un respaldo externo.
+
+El servidor limita cada solicitud a 2 MB y aplica límites a las listas. La capacidad gratuita de Neon y el consumo de Vercel deben revisarse con el uso real. El registro de actividad crece con los guardados; no se ha aplicado borrado automático de historial.
+
+## Estructura
+
+- `public/`: interfaz y motor original adaptado; `vendor/` se genera al construir.
+- `server/`: autenticación, permisos, esquema, validación y conexión PostgreSQL.
+- `api/index.js`: entrada de Vercel.
+- `scripts/`: preparación, migración, primer administrador y servidor local.
+- `tests/`: verificaciones aisladas.
+
+La versión original permanece en la historia de Git. No publicar `.env`, `.local`, pruebas exportadas o credenciales.

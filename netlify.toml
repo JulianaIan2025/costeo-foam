@@ -1,5 +1,5 @@
 [build]
-command = "npm run build"
+command = "npm run setup:deploy && npm run build"
 publish = "public"
 
 [functions]

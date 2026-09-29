@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
+    "setup:deploy": "node scripts/setup-deploy.js",
     "start": "node --env-file-if-exists=.env scripts/dev.js",
     "dev": "node --env-file-if-exists=.env scripts/dev.js",
     "db:migrate": "node --env-file-if-exists=.env scripts/migrate.js",

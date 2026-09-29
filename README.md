@@ -70,7 +70,7 @@ Netlify Free admite proyectos comerciales sujetos a sus límites mensuales. Esta
 
 1. Crear un sitio desde la rama GitHub que contiene esta versión. Si se usa una bifurcación, mantener el acceso al repositorio bajo control de North Foam.
 2. Configurar build `npm run build`, carpeta publicada `public` y versión Node 24. El archivo `netlify.toml` ya define el build y la ruta de la API.
-3. Crear una base vacía en Neon. Ejecutar `npm run db:migrate` y `npm run admin:create` en un entorno privado con la conexión de Neon; no poner la contraseña inicial en Netlify ni en Git.
+3. Crear una base vacía en Neon. Para inicializar desde un entorno privado local, ejecutar `npm run db:migrate` y `npm run admin:create` con la conexión de Neon. Como alternativa para el primer despliegue privado en Netlify, definir temporalmente `BOOTSTRAP_ADMIN=true`, `ADMIN_EMAIL`, `ADMIN_NAME` y `ADMIN_PASSWORD` (marcada como secreta) y volver a desplegar. El build ejecuta la migración y crea el primer administrador solo cuando `BOOTSTRAP_ADMIN=true`. Retirar esas cuatro variables inmediatamente después de verificar el éxito. Nunca poner la contraseña inicial en Git ni en el chat.
 4. Configurar en Netlify las variables privadas `DATABASE_URL` y `APP_ORIGIN`. Para el primer despliegue, APP_ORIGIN debe ser el origen HTTPS exacto de la URL de Netlify que se utilizará, sin barra final. `BMX_TOKEN` es opcional.
 5. No compartir la conexión de producción con despliegues de prueba de ramas o solicitudes de cambio. Revisar el alcance de las variables en Netlify.
 6. Cuando el dominio esté validado, cambiar APP_ORIGIN a `https://costeo.northfoamco.com` y volver a publicar. Las escrituras desde otro origen serán rechazadas.

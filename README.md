@@ -96,6 +96,8 @@ Agregar el dominio al proyecto de Vercel o Netlify y copiar el registro específ
 
 El botón Respaldar datos descarga el documento financiero en JSON; no incluye usuarios, contraseñas o bitácora. Antes de cambios relevantes, guardar un respaldo privado. Definir además respaldo completo de PostgreSQL y probar su restauración conforme a la operación de la empresa; esta entrega no automatiza un respaldo externo.
 
+Para migrar un respaldo de la versión que guardaba en el navegador, ejecutar `node scripts/convert-legacy-backup.js respaldo.json convertido.json` fuera del repositorio y luego importar el archivo convertido desde una cuenta administradora. La conversión valida todos los campos, conserva los valores históricos `qDeseada`, `bloque` y `presupuesto.periodo`, y omite el PIN antiguo, que no debe usarse como credencial en la versión compartida. Las cantidades `qDeseada` quedan archivadas en la base; los reportes actuales de requerimientos usan los volúmenes capturados por periodo.
+
 El servidor limita cada solicitud a 2 MB y aplica límites a las listas. La capacidad gratuita de Neon y el consumo de Vercel deben revisarse con el uso real. El registro de actividad crece con los guardados; no se ha aplicado borrado automático de historial.
 
 ## Estructura

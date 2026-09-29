@@ -42,7 +42,7 @@ APP_ORIGIN=http://localhost:3100
 5. Crear el primer administrador como se describe abajo.
 6. `npm run dev` y abrir `http://localhost:3100`.
 
-La base local es solo para desarrollo. Nunca configurar LOCAL_DATABASE en Vercel.
+La base local es solo para desarrollo. Nunca configurar LOCAL_DATABASE en el alojamiento público.
 
 ## Pruebas
 
@@ -64,6 +64,18 @@ La base local es solo para desarrollo. Nunca configurar LOCAL_DATABASE en Vercel
 10. Usar una base o rama separada para previews; nunca copiar la conexión de producción a previews no controlados. Configurar el origen exacto del preview que se quiera probar.
 11. Verificar en Vercel: iniciar sesión, cambiar contraseña temporal, crear usuario de Consulta, guardar/recargar una captura, rechazar edición de Consulta y comprobar conflictos entre dos sesiones.
 
+## Netlify Free y Neon
+
+Netlify Free admite proyectos comerciales sujetos a sus límites mensuales. Esta alternativa usa los mismos archivos de la app y la misma base Neon. La configuración está en `netlify.toml`; `netlify/functions/api.js` ejecuta el servidor Express.
+
+1. Crear un sitio desde la rama GitHub que contiene esta versión. Si se usa una bifurcación, mantener el acceso al repositorio bajo control de North Foam.
+2. Configurar build `npm run build`, carpeta publicada `public` y versión Node 24. El archivo `netlify.toml` ya define el build y la ruta de la API.
+3. Crear una base vacía en Neon. Ejecutar `npm run db:migrate` y `npm run admin:create` en un entorno privado con la conexión de Neon; no poner la contraseña inicial en Netlify ni en Git.
+4. Configurar en Netlify las variables privadas `DATABASE_URL` y `APP_ORIGIN`. Para el primer despliegue, APP_ORIGIN debe ser el origen HTTPS exacto de la URL de Netlify que se utilizará, sin barra final. `BMX_TOKEN` es opcional.
+5. No compartir la conexión de producción con despliegues de prueba de ramas o solicitudes de cambio. Revisar el alcance de las variables en Netlify.
+6. Cuando el dominio esté validado, cambiar APP_ORIGIN a `https://costeo.northfoamco.com` y volver a publicar. Las escrituras desde otro origen serán rechazadas.
+7. Verificar acceso, cambio de contraseña temporal, roles, guardado y exportaciones en el sitio publicado. El plan gratuito tiene límite de créditos mensuales; el servicio puede pausarse al agotarlos.
+
 ## Primer administrador
 
 No hay credenciales predeterminadas ni una ruta pública de instalación.
@@ -78,7 +90,7 @@ Dirección acordada: `costeo.northfoamco.com`.
 
 El administrador del dominio comprado desde Google Workspace debe entrar a Cuenta → Dominios → Administrar dominios → Ver detalles para localizar el registrador y su consola DNS.
 
-Agregar el dominio al proyecto de Vercel y copiar el registro específico que Vercel solicite para el host `costeo`. Usualmente será CNAME y, si corresponde, verificación TXT. No usar un destino supuesto ni cambiar los servidores de nombres o los registros del correo. Verificar HTTPS y el estado de validación en Vercel al terminar.
+Agregar el dominio al proyecto de Vercel o Netlify y copiar el registro específico que ese proveedor solicite para el host `costeo`. Usualmente será CNAME y, si corresponde, verificación TXT. No usar un destino supuesto ni cambiar los servidores de nombres o los registros del correo. Verificar HTTPS y el estado de validación en el proveedor al terminar.
 
 ## Respaldo y límites
 
@@ -90,7 +102,7 @@ El servidor limita cada solicitud a 2 MB y aplica límites a las listas. La capa
 
 - `public/`: interfaz y motor original adaptado; `vendor/` se genera al construir.
 - `server/`: autenticación, permisos, esquema, validación y conexión PostgreSQL.
-- `api/index.js`: entrada de Vercel.
+- `api/index.js`: entrada de Vercel; `netlify/functions/api.js`: entrada de Netlify.
 - `scripts/`: preparación, migración, primer administrador y servidor local.
 - `tests/`: verificaciones aisladas.
 

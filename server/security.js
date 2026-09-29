@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 const derive = promisify(scrypt);
 export const digest = value => createHash('sha256').update(value).digest('hex');
 export const newToken = () => randomBytes(32).toString('hex');
-export const cookieName = process.env.VERCEL || process.env.NODE_ENV === 'production' ? '__Host-nf_session' : 'nf_session';
+export const cookieName = process.env.VERCEL || process.env.NETLIFY || process.env.NODE_ENV === 'production' ? '__Host-nf_session' : 'nf_session';
 export function cookie(res, token, maxAge = 8 * 3600) {
   res.setHeader('Set-Cookie', `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${cookieName.startsWith('__Host-') ? '; Secure' : ''}`);
 }

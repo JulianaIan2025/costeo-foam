@@ -24,6 +24,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "pg": "^8.23.0",
+    "serverless-http": "^4.0.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {

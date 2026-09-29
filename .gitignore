@@ -6,3 +6,6 @@ node_modules/
 dist/
 test-results/
 public/vendor/
+
+# Local Netlify folder
+.netlify

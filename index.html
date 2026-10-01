@@ -2512,7 +2512,13 @@ const app={
   delMaterial(k){ S.catalogo.splice(k,1); save(); renderKPIs(); renderChain(); renderSection("placas"); },
   setEscenario(s){S.control.escenario=s;save();renderKPIs();renderChain();renderSection(current);},
   aplicarEscenarios(){ S.escenarios=clone(DEFAULTS.escenarios); save(); renderKPIs(); renderChain(); renderSection("control"); toast("Escenarios de North Foam aplicados"); },
-  refrescarTC(){ toast("Consultando Banxico…"); autoTC().then(()=>{ if(current==="control") renderSection("control"); }); },
+  refrescarTC(){ toast("Consultando Banxico…");
+    autoTC(true).then(res=>{
+      if(current==="control") renderSection("control");
+      if(res&&res.ok) toast(res.cambio?("TC actualizado: $"+fN(res.valor,4)+" ("+res.fecha+")"):("TC ya estaba al día: $"+fN(res.valor,4)));
+      else toast("No se actualizó — "+((res&&res.motivo)||"error desconocido"));
+    });
+  },
   setTcOficial(v){ S.control.tcBase=v; S.control.tcFecha=new Date().toLocaleDateString("es-MX"); save(); renderKPIs(); renderChain(); renderSection("control"); toast("TC base actualizado a "+v); },
   setSensMetric(m){sensMetric=m;renderSection("dashboard");},
   setRutaFilter(v){rutaFilter=v;renderSection("ruta");},
@@ -2704,26 +2710,32 @@ document.addEventListener("change",e=>{
 
 /* ===== Tipo de cambio automático (Banxico vía /api/tc) ===== */
 let TC_API=null;
-async function autoTC(){
-  if(S.control.tcAuto===false) return;
+async function autoTC(force){
+  if(!force && S.control.tcAuto===false) return {ok:false,motivo:"desactivado"};
   try{
     const r=await fetch("/api/tc",{cache:"no-store"});
-    if(!r.ok) return;
+    if(!r.ok){
+      let det=""; try{ const je=await r.json(); det=je&&je.error?je.error:""; }catch(e){}
+      return {ok:false,motivo:(det==="falta_token")?"Falta configurar BMX_TOKEN en Vercel":("El servicio respondió "+r.status)};
+    }
     const j=await r.json();
-    if(!j||(!j.fix&&!j.pagos)) return;
+    if(!j||(!j.fix&&!j.pagos)) return {ok:false,motivo:"Banxico no devolvió datos"};
     TC_API=j;
     const pick=(S.control.tcSerie==="pagos"&&j.pagos)?j.pagos:(j.fix||j.pagos);
-    if(pick&&isFinite(pick.valor)&&pick.valor>0){
-      const cambio=(+S.control.tcBase!==+pick.valor)||(S.control.tcFecha!==pick.fecha);
-      S.control.tcBase=pick.valor; S.control.tcFecha=pick.fecha;
-      save(); renderKPIs(); renderChain();
-      if(current==="dashboard"||current==="control"||current==="presupuesto") renderSection(current);
-      if(cambio) toast("TC actualizado: $"+fN(pick.valor,4)+" ("+pick.fecha+")");
-    }
-  }catch(e){ /* sin conexión al endpoint: se conserva el valor capturado */ }
+    if(!(pick&&isFinite(pick.valor)&&pick.valor>0)) return {ok:false,motivo:"Dato no válido"};
+    const cambio=(+S.control.tcBase!==+pick.valor)||(S.control.tcFecha!==pick.fecha);
+    S.control.tcBase=pick.valor; S.control.tcFecha=pick.fecha;
+    save(); renderKPIs(); renderChain();
+    if(current==="dashboard"||current==="control"||current==="presupuesto") renderSection(current);
+    return {ok:true,cambio,valor:pick.valor,fecha:pick.fecha};
+  }catch(e){
+    return {ok:false,motivo:(location.protocol==="file:"||location.hostname.indexOf("claude")>=0)
+      ? "El servicio de Banxico solo funciona en el sitio publicado (costeo-foam.vercel.app)"
+      : "No se pudo conectar al servicio"};
+  }
 }
 renderAll();
-autoTC();
+autoTC().then(res=>{ if(res&&res.ok&&res.cambio) toast("TC actualizado: $"+fN(res.valor,4)+" ("+res.fecha+")"); });
 // Si Chart.js aún no cargaba en el primer render, reconstruye el panel al terminar de cargar.
 window.addEventListener("load",()=>{ if(current==="dashboard"||current==="presupuesto") renderSection(current); });
 </script>

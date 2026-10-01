@@ -4,7 +4,13 @@ Aplicación financiera adaptada del repositorio `linjorgeuribe-dev/costeo-foam`,
 
 ## Estado de esta entrega
 
-Versión local preparada para Vercel y PostgreSQL/Neon. No está desplegada en Vercel, no existe todavía una base Neon conectada y no se han cambiado registros DNS. La validación local utiliza PostgreSQL embebido (PGlite), sin datos reales. Falta verificar en los servicios definitivos después de crear las cuentas.
+La aplicación está publicada en `https://costeo.northfoamco.com` mediante Netlify y una base PostgreSQL en Neon. La versión compartida incluye usuarios y permisos, y recibió el respaldo de datos de la versión anterior. Vercel permanece como alternativa de alojamiento, pero no es el servicio de producción actual.
+
+## Actualizaciones desde el repositorio de Jorge
+
+La primera integración de esta rama debe revisarse y fusionarse en `main` de `linjorgeuribe-dev/costeo-foam`. Después, cambiar **el repositorio vinculado del mismo sitio de Netlify** a ese repositorio y elegir `main` como rama de producción. Conservar el proyecto Netlify existente, su dominio `costeo.northfoamco.com`, y las variables privadas `DATABASE_URL` y `APP_ORIGIN`. No crear una base Neon nueva ni volver a ejecutar la inicialización del administrador. Comprobar que la nueva publicación permita entrar con las cuentas actuales y muestre los datos existentes.
+
+Desde esa integración, Jorge debe actualizar `public/model.js` para la interfaz y los cálculos, `server/` para la API y reglas de datos, y `netlify.toml` solo cuando cambie la configuración de despliegue. El antiguo `index.html` en la raíz ya no es el archivo servido por Netlify. Los cambios enviados a `main` se publicarán automáticamente; conviene prepararlos en una rama, revisar las pruebas y fusionarlos cuando estén listos. Un cambio de estructura de datos exige planear una migración de Neon antes de publicar la versión nueva.
 
 ## Funciones
 

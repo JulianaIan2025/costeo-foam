@@ -2080,7 +2080,14 @@ const app={
   delMaterial(k){ S.catalogo.splice(k,1); save(); renderKPIs(); renderChain(); renderSection("placas"); },
   setEscenario(s){S.control.escenario=s;save();renderKPIs();renderChain();renderSection(current);},
   aplicarEscenarios(){ S.escenarios=clone(DEFAULTS.escenarios); save(); renderKPIs(); renderChain(); renderSection("control"); toast("Factores neutrales aplicados"); },
-  refrescarTC(){ toast("Consultando Banxico…"); autoTC().then(()=>{ if(current==="control") renderSection("control"); }); },
+  refrescarTC(){
+    toast("Consultando Banxico…");
+    autoTC(true).then(res=>{
+      if(current==="control") renderSection("control");
+      if(res?.ok) toast(res.cambio?"TC actualizado: $"+fN(res.valor,4)+" ("+res.fecha+")":"TC ya estaba al día: $"+fN(res.valor,4));
+      else toast("No se actualizó — "+(res?.motivo||"error desconocido"));
+    });
+  },
   setTcOficial(v){ S.control.tcBase=v; S.control.tcFecha=new Date().toLocaleDateString("es-MX"); save(); renderKPIs(); renderChain(); renderSection("control"); toast("TC base actualizado a "+v); },
   setSensMetric(m){sensMetric=m;renderSection("dashboard");},
   setRutaFilter(v){rutaFilter=v;renderSection("ruta");},
@@ -2273,23 +2280,29 @@ document.addEventListener("change",e=>{
 
 /* ===== Tipo de cambio automático (Banxico vía /api/tc) ===== */
 let TC_API=null;
-async function autoTC(){
-  if(!puedeEditar()||S.control.tcAuto===false) return;
+async function autoTC(force=false){
+  if(!puedeEditar()) return {ok:false,motivo:"Tu perfil no permite cambiar el tipo de cambio"};
+  if(!force&&S.control.tcAuto===false) return {ok:false,motivo:"actualización automática desactivada"};
   try{
     const r=await fetch("/api/tc",{cache:"no-store"});
-    if(!r.ok) return;
+    if(!r.ok){
+      let motivo="El servicio respondió "+r.status;
+      try{const body=await r.json();if(body?.error) motivo=body.error;}catch(e){}
+      return {ok:false,motivo};
+    }
     const j=await r.json();
-    if(!j||(!j.fix&&!j.pagos)) return;
+    if(!j||(!j.fix&&!j.pagos)) return {ok:false,motivo:"Banxico no devolvió datos"};
     TC_API=j;
     const pick=(S.control.tcSerie==="pagos"&&j.pagos)?j.pagos:(j.fix||j.pagos);
-    if(pick&&isFinite(pick.valor)&&pick.valor>0){
-      const cambio=(+S.control.tcBase!==+pick.valor)||(S.control.tcFecha!==pick.fecha);
+    if(!(pick&&isFinite(pick.valor)&&pick.valor>0)) return {ok:false,motivo:"Banxico devolvió un dato no válido"};
+    const cambio=(+S.control.tcBase!==+pick.valor)||(S.control.tcFecha!==pick.fecha);
+    if(cambio){
       S.control.tcBase=pick.valor; S.control.tcFecha=pick.fecha;
       save(); renderKPIs(); renderChain();
       if(current==="dashboard"||current==="control"||current==="presupuesto") renderSection(current);
-      if(cambio) toast("TC actualizado: $"+fN(pick.valor,4)+" ("+pick.fecha+")");
     }
-  }catch(e){ /* sin conexión al endpoint: se conserva el valor capturado */ }
+    return {ok:true,cambio,valor:pick.valor,fecha:pick.fecha};
+  }catch(e){return {ok:false,motivo:"No se pudo conectar con Banxico"};}
 }
 
 window.app=app;
